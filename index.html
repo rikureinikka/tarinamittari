@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#111418">
+<title>Tärinämittari</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+:root{--bg:#111418;--card:#1b2027;--line:#2c333d;--tx:#eef1f4;--mut:#9aa4b1;--ok:#2fbf71;--warn:#f2b632;--bad:#ef4d4d;--acc:#3d8bfd}
+*{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.4 system-ui,-apple-system,Roboto,sans-serif}
+header{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line)}
+h1{font-size:18px;margin:0;padding:10px 14px 4px}
+nav{display:flex;flex-wrap:wrap}nav button{flex:1;background:none;border:0;border-bottom:3px solid transparent;color:var(--mut);padding:10px 4px;font-size:15px}
+nav button.on{color:var(--tx);border-color:var(--acc)}
+main{padding:12px;max-width:640px;margin:0 auto 60px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
+.card h2{font-size:15px;margin:0 0 10px;color:var(--mut);font-weight:600}
+.note{background:#2a2412;border:1px solid #5a4a16;color:#f6dc8f;border-radius:12px;padding:10px 12px;font-size:14px;margin-bottom:12px}
+.note.red{background:#2c1515;border-color:#6b2222;color:#ffb4b4}
+button.big{width:100%;padding:18px;font-size:20px;font-weight:700;border-radius:14px;border:0;background:var(--acc);color:#fff}
+button.big.stop{background:var(--bad)}
+button.btn{padding:10px 14px;border-radius:10px;border:1px solid var(--line);background:#252b34;color:var(--tx);font-size:15px;margin:3px 4px 3px 0}
+button.btn.pri{background:var(--acc);border-color:var(--acc)}button.btn.dan{border-color:#6b2222;color:#ffb4b4}
+button:disabled{opacity:.45}
+label{display:block;color:var(--mut);font-size:14px;margin:8px 0 4px}
+input,select{width:100%;padding:10px;border-radius:10px;border:1px solid var(--line);background:#0e1115;color:var(--tx);font-size:16px}
+input[type=range]{padding:0}
+.row{display:flex;gap:10px;flex-wrap:wrap}.row>*{flex:1;min-width:120px}
+.ind{display:flex;align-items:center;gap:14px}
+.dot{width:64px;height:64px;border-radius:50%;background:#333a44;flex:none;transition:background .15s}
+.dot.on{background:var(--ok);box-shadow:0 0 24px var(--ok)}.dot.cand{background:#6b7d3a}
+.big-t{font-size:30px;font-weight:800;font-variant-numeric:tabular-nums}
+.mut{color:var(--mut);font-size:14px}
+.meter{position:relative;height:14px;background:#0e1115;border-radius:7px;overflow:hidden;margin:6px 0}
+.meter i{position:absolute;left:0;top:0;bottom:0;background:var(--acc)}.meter b{position:absolute;top:0;bottom:0;width:2px;background:#fff}
+.a8{font-size:44px;font-weight:800;font-variant-numeric:tabular-nums}
+.ok{color:var(--ok)}.action{color:var(--warn)}.limit{color:var(--bad)}
+.scale{position:relative;height:22px;border-radius:6px;background:linear-gradient(90deg,var(--ok) 0 41.6%,var(--warn) 41.6% 83.3%,var(--bad) 83.3%);margin:10px 0 18px}
+.scale .p{position:absolute;top:-5px;width:4px;height:32px;background:#fff;border-radius:2px;margin-left:-2px}
+.scale span{position:absolute;top:24px;font-size:12px;color:var(--mut);transform:translateX(-50%)}
+table{width:100%;border-collapse:collapse;font-size:15px}td,th{padding:7px 4px;border-bottom:1px solid var(--line);text-align:left}th{color:var(--mut);font-weight:600;font-size:13px}td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+dialog{background:var(--card);color:var(--tx);border:1px solid var(--line);border-radius:16px;width:min(94vw,520px);padding:16px}
+dialog::backdrop{background:rgba(0,0,0,.6)}
+.count{font-size:64px;font-weight:800;text-align:center;font-variant-numeric:tabular-nums}
+.hidden{display:none!important}
+ol,ul{padding-left:20px;margin:6px 0}li{margin:4px 0}
+</style>
+</head>
+<body>
+<header><h1>Tärinämittari <span class="mut">· käsi-käsivarsitärinä</span></h1>
+<nav id="nav"><button data-v="meas" class="on">Mittaa</button><button data-v="tools">Työkalut</button><button data-v="log">Loki</button><button data-v="help">Ohje</button></nav></header>
+<main>
+<!-- MITTAA -->
+<section id="v-meas">
+  <div class="note">Mittaus toimii vain, kun sovellus on auki ja näyttö päällä. Pidä puhelin lähellä konetta (esim. rintataskussa tai työtasolla). Tulos on arvio.</div>
+  <div id="noTools" class="note red hidden">Lisää ja kalibroi ensin työkalu Työkalut-välilehdellä.</div>
+  <div class="card">
+    <label for="toolSel">Työkalu</label>
+    <select id="toolSel"></select>
+    <label for="sens">Herkkyys: <b id="sensV">5</b> <span class="mut">(suurempi = herkempi)</span></label>
+    <input id="sens" type="range" min="1" max="10" step="1" value="5">
+    <div style="height:12px"></div>
+    <button id="startBtn" class="big">▶ Aloita mittaus</button>
+    <div id="pauseNote" class="note red hidden" style="margin:10px 0 0"></div>
+  </div>
+  <div class="card">
+    <div class="ind"><div id="dot" class="dot"></div>
+      <div><div id="stateTxt" class="big-t">Ei mittausta</div><div id="runTxt" class="mut">&nbsp;</div></div></div>
+    <div class="meter"><i id="lvl"></i><b id="lvlThr"></b></div>
+    <div id="dbg" class="mut">&nbsp;</div>
+  </div>
+  <div class="card">
+    <h2>Päivän altistus A(8)</h2>
+    <div><span id="a8" class="a8">0,00</span> <span class="mut">m/s²</span> <span id="a8s" class="ok" style="font-weight:700"></span></div>
+    <div class="scale"><div id="a8p" class="p" style="left:0"></div><span style="left:41.6%">2,5 toimenpidearvo</span><span style="left:83.3%">5 raja</span></div>
+    <div id="pts" class="mut"></div>
+    <div id="remain" style="margin-top:8px"></div>
+  </div>
+  <div class="card">
+    <h2>Tänään työkaluittain</h2>
+    <table><thead><tr><th>Työkalu</th><th class="n">Aika</th><th class="n">Kerrat</th><th class="n">a<sub>hv</sub></th></tr></thead><tbody id="todayT"></tbody></table>
+  </div>
+</section>
+
+<!-- TYÖKALUT -->
+<section id="v-tools" class="hidden">
+  <div id="toolList"></div>
+  <div class="card">
+    <h2>Uusi työkalu</h2>
+    <label>Nimi</label><input id="nName" placeholder="esim. Hilti TE 30 iskuporakone">
+    <div class="row">
+      <div><label>a<sub>hv</sub> valmistajalta (m/s²)</label><input id="nAhv" inputmode="decimal" placeholder="esim. 9,5"></div>
+      <div><label>Korjauskerroin</label><input id="nCorr" inputmode="decimal" value="1,0"></div>
+    </div>
+    <p class="mut">Valmistajan arvo on mitattu laboratoriossa ja on usein todellista pienempi. Varovaisempi arvio: kerroin 1,5–2.</p>
+    <button id="addTool" class="btn pri">Lisää ja kalibroi</button>
+  </div>
+</section>
+
+<!-- LOKI -->
+<section id="v-log" class="hidden">
+  <div class="card">
+    <div class="row"><div><label>Päivä</label><input id="logDay" type="date"></div></div>
+    <div id="logSum" class="mut" style="margin-top:8px"></div>
+  </div>
+  <div class="card"><h2>Käyttökerrat</h2>
+    <table><thead><tr><th>Työkalu</th><th>Klo</th><th class="n">Kesto</th><th></th></tr></thead><tbody id="logT"></tbody></table>
+  </div>
+  <div class="card"><h2>Lisää aika käsin</h2>
+    <div class="row"><div><label>Työkalu</label><select id="mTool"></select></div>
+    <div><label>Alkoi klo</label><input id="mStart" type="time"></div>
+    <div><label>Kesto (min)</label><input id="mMin" inputmode="decimal" placeholder="esim. 12"></div></div>
+    <button id="mAdd" class="btn pri" style="margin-top:10px">Lisää</button>
+  </div>
+  <div class="card">
+    <button id="csvBtn" class="btn pri">Vie CSV (kaikki päivät)</button>
+    <button id="csvDayBtn" class="btn">Vie CSV (valittu päivä)</button>
+    <button id="resetDay" class="btn dan">Nollaa valittu päivä</button>
+  </div>
+</section>
+
+<!-- OHJE -->
+<section id="v-help" class="hidden">
+  <div class="card"><h2>Käyttö</h2><ol>
+    <li>Työkalut: lisää kone, sen valmistajan ilmoittama tärinäarvo a<sub>hv</sub> (m/s², käyttöohje tai CE-tiedot) ja korjauskerroin.</li>
+    <li>Kalibroi: ensin 5 s taustaääntä kone pois päältä, sitten 5 s konetta käynnissä tavallisessa työssä. Kalibroi samassa paikassa kuin puhelin on mitatessa.</li>
+    <li>Mittaa: valitse kone ja paina Aloita. Näyttö pysyy päällä. Vihreä pallo = kone käy.</li>
+    <li>Jos laskee liikaa (esim. puhetta tai muita koneita), pienennä herkkyyttä. Jos ei tunnista konetta, suurenna herkkyyttä tai kalibroi uudelleen.</li>
+    <li>Loki: tarkista ja korjaa ajat, lisää käsin unohtuneet ajat, vie CSV Exceliin.</li></ol></div>
+  <div class="card"><h2>Laskenta</h2>
+    <p>A(8) = √( Σ (a<sub>hv,i</sub> × kerroin)² × T<sub>i</sub> / 8 h )</p>
+    <p>Valtioneuvoston asetus 48/2005: <b>toimenpidearvo 2,5 m/s²</b> (altistusta on vähennettävä, terveystarkastukset), <b>raja-arvo 5 m/s²</b> (ei saa ylittää).</p>
+    <p>Pisteet (HSE-tapa): 100 p = toimenpidearvo, 400 p = raja-arvo. Pisteet voi laskea yhteen eri koneista.</p>
+    <label><input id="showPts" type="checkbox" style="width:auto"> Näytä pisteet mittausnäkymässä</label></div>
+  <div class="card"><h2>Rajoitukset</h2><ul>
+    <li>Sovellus mittaa vain koneen käyntiajan äänen perusteella, ei itse tärinää. Todellinen tärinä riippuu terästä, materiaalista, otteesta ja koneen kunnosta.</li>
+    <li>Mittaus toimii vain sovellus auki ja näyttö päällä. Jos näyttö sammuu tai vaihdat sovellusta, mittaus keskeytyy ja käynnissä ollut ajo kirjataan siihen asti.</li>
+    <li>Tunnistetaan vain valittu työkalu. Lähellä käyvä samanlainen kone (toisen työntekijän pora) voi laskea mukaan.</li>
+    <li>Tiedot ovat vain tässä puhelimessa (selaimen muistissa). Vie CSV säännöllisesti talteen.</li></ul>
+    <p class="mut">Versio <span id="ver"></span></p></div>
+</section>
+</main>
+
+<dialog id="calDlg">
+  <h2 id="calTitle" style="margin-top:0">Kalibrointi</h2>
+  <p id="calTxt"></p>
+  <div id="calCount" class="count"></div>
+  <div class="meter"><i id="calLvl"></i></div>
+  <div id="calBtns"></div>
+</dialog>
+<dialog id="editDlg">
+  <h2 style="margin-top:0">Muokkaa käyttökertaa</h2>
+  <div class="row"><div><label>Alkoi</label><input id="eStart" type="time" step="1"></div><div><label>Päättyi</label><input id="eEnd" type="time" step="1"></div></div>
+  <div style="margin-top:12px"><button id="eSave" class="btn pri">Tallenna</button><button id="eDel" class="btn dan">Poista</button><button id="eCancel" class="btn">Peruuta</button></div>
+</dialog>
+
+<script>
+/* Tärinämittari – ydinlogiikka (puhdas JS, testattavissa Nodella) */
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) module.exports = factory();
+  else root.TM = factory();
+})(typeof self !== 'undefined' ? self : this, function () {
+  'use strict';
+  var EIGHT_H_S = 8 * 3600;
+  var ACTION = 2.5, LIMIT = 5.0;
+
+  /* ---------- Altistuslaskenta ---------- */
+  // entries: [{a: m/s2 (korjattu), t: sekuntia}]
+  function sumA2T(entries) {
+    var s = 0;
+    for (var i = 0; i < entries.length; i++) s += entries[i].a * entries[i].a * entries[i].t;
+    return s;
+  }
+  function a8(entries) { return Math.sqrt(sumA2T(entries) / EIGHT_H_S); }
+  // HSE-pisteet: 100 p = toimenpidearvo 2,5, 400 p = raja-arvo 5
+  function points(a, tSec) { return (a / ACTION) * (a / ACTION) * (tSec / EIGHT_H_S) * 100; }
+  function totalPoints(entries) {
+    var p = 0; for (var i = 0; i < entries.length; i++) p += points(entries[i].a, entries[i].t); return p;
+  }
+  // Jäljellä oleva aika (s) annetulla työkalun arvolla a ennen kuin A(8) saavuttaa kohdearvon
+  function remainingSec(entries, a, target) {
+    if (!(a > 0)) return Infinity;
+    var budget = target * target * EIGHT_H_S - sumA2T(entries);
+    return Math.max(0, budget / (a * a));
+  }
+  function status(A8) { return A8 >= LIMIT ? 'limit' : A8 >= ACTION ? 'action' : 'ok'; }
+
+  /* ---------- Spektripiirteet ---------- */
+  // Logaritmiset kaistat 80 Hz – 10 kHz
+  function makeBands(sampleRate, fftSize, nBands, fMin, fMax) {
+    nBands = nBands || 24; fMin = fMin || 80; fMax = Math.min(fMax || 10000, sampleRate / 2 - 1);
+    var binHz = sampleRate / fftSize, bands = [];
+    var r = Math.pow(fMax / fMin, 1 / nBands);
+    for (var b = 0; b < nBands; b++) {
+      var lo = fMin * Math.pow(r, b), hi = fMin * Math.pow(r, b + 1);
+      var i0 = Math.max(1, Math.floor(lo / binHz)), i1 = Math.max(i0 + 1, Math.ceil(hi / binHz));
+      bands.push([i0, i1]);
+    }
+    return bands;
+  }
+  // freqDb: Float32Array dB-arvoja (AnalyserNode.getFloatFrequencyData)
+  function bandFeatures(freqDb, bands) {
+    var out = new Array(bands.length);
+    for (var b = 0; b < bands.length; b++) {
+      var s = 0, n = 0;
+      for (var i = bands[b][0]; i < bands[b][1] && i < freqDb.length; i++) {
+        var v = freqDb[i]; if (!isFinite(v)) v = -160;
+        s += Math.pow(10, v / 10); n++;
+      }
+      out[b] = 10 * Math.log10(n ? s / n + 1e-20 : 1e-20);
+    }
+    return out;
+  }
+  function rmsDb(timeData) {
+    var s = 0; for (var i = 0; i < timeData.length; i++) s += timeData[i] * timeData[i];
+    return 10 * Math.log10(s / timeData.length + 1e-12);
+  }
+  function mean(arr) { var s = 0; for (var i = 0; i < arr.length; i++) s += arr[i]; return s / arr.length; }
+  // Muoto = dB-vektori keskiarvo poistettuna (tasosta riippumaton)
+  function shape(v) { var m = mean(v); return v.map(function (x) { return x - m; }); }
+  function cosine(a, b) {
+    var d = 0, na = 0, nb = 0;
+    for (var i = 0; i < a.length; i++) { d += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; }
+    return na && nb ? d / Math.sqrt(na * nb) : 0;
+  }
+  function median(arr) { var s = arr.slice().sort(function (a, b) { return a - b; }); var m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; }
+
+  // Kalibrointi: kehyslistat [{rms, bands}] taustasta ja koneesta
+  function buildProfile(bgFrames, toolFrames) {
+    if (!bgFrames.length || !toolFrames.length) throw new Error('Kalibrointinäyte puuttuu');
+    function avgBands(frames) {
+      var n = frames[0].bands.length, acc = new Array(n).fill(0);
+      frames.forEach(function (f) { for (var i = 0; i < n; i++) acc[i] += f.bands[i]; });
+      return acc.map(function (x) { return x / frames.length; });
+    }
+    var bgB = avgBands(bgFrames), toolB = avgBands(toolFrames);
+    var bgRms = median(bgFrames.map(function (f) { return f.rms; }));
+    var toolRms = median(toolFrames.map(function (f) { return f.rms; }));
+    var toolShape = shape(toolB), bgShape = shape(bgB);
+    // Laatumittari: kuinka hyvin koneen kehykset erottuvat taustasta
+    var simTool = mean(toolFrames.map(function (f) { return cosine(shape(f.bands), toolShape); }));
+    var simBgAsTool = mean(bgFrames.map(function (f) { return cosine(shape(f.bands), toolShape); }));
+    // Tunnusomaiset kaistat: joissa kone nostaa tasoa selvästi taustasta
+    var charBands = [];
+    for (var i = 0; i < toolB.length; i++) if (toolB[i] - bgB[i] >= 6) charBands.push(i);
+    return {
+      charBands: charBands,
+      bgRms: bgRms, toolRms: toolRms, bgBands: bgB, toolBands: toolB,
+      toolShape: toolShape, bgShape: bgShape,
+      quality: { levelDiffDb: toolRms - bgRms, simTool: simTool, simBg: simBgAsTool }
+    };
+  }
+
+  // Herkkyys 1..10 (5 = oletus). Suurempi = herkempi.
+  function thresholds(profile, sensitivity) {
+    var s = Math.min(10, Math.max(1, sensitivity == null ? 5 : sensitivity));
+    var frac = 0.75 - (s - 1) * (0.6 / 9); // 0.75 .. 0.15 tasoerosta
+    var diff = Math.max(3, profile.toolRms - profile.bgRms);
+    var levelThr = profile.bgRms + diff * frac;
+    var q = profile.quality;
+    // Samankaltaisuusraja kalibroinnin kehysten mukaan
+    var simRef = q.simTool;
+    var simThr = simRef - (0.05 + (s - 1) * 0.035); // 0.05 .. 0.365 alle koneen tyypillisen
+    var bandFrac = 0.7 - (s - 1) * (0.4 / 9); // 0.7 .. 0.3 kaistan tasoerosta
+    var presThr = 0.95 - (s - 1) * (0.25 / 9); // 0.95 .. 0.70 kaistoista
+    return { levelThr: levelThr, simThr: Math.max(-1, simThr), bandFrac: bandFrac, presThr: presThr };
+  }
+
+  function presence(frame, profile, frac) {
+    var cb = profile.charBands || []; if (cb.length < 3) return 0;
+    var lit = 0;
+    for (var k = 0; k < cb.length; k++) {
+      var i = cb[k];
+      if (frame.bands[i] >= profile.bgBands[i] + (profile.toolBands[i] - profile.bgBands[i]) * frac) lit++;
+    }
+    return lit / cb.length;
+  }
+  // Yhden kehyksen luokittelu
+  function classify(frame, profile, sensitivity) {
+    var th = thresholds(profile, sensitivity);
+    var sh = shape(frame.bands);
+    var simTool = cosine(sh, profile.toolShape);
+    var simBg = cosine(sh, profile.bgShape);
+    var levelOk = frame.rms >= th.levelThr;
+    var pres = presence(frame, profile, th.bandFrac);
+    // Muoto täsmää TAI lähes kaikki koneen tunnusomaiset kaistat ovat koholla (kestää päälle puhumisen)
+    var spectralOk = (simTool >= th.simThr && simTool >= simBg - 0.02) || pres >= th.presThr;
+    return { on: levelOk && spectralOk, levelOk: levelOk, spectralOk: spectralOk, simTool: simTool, simBg: simBg, presence: pres, levelThr: th.levelThr, simThr: th.simThr };
+  }
+
+  /* ---------- Hystereesi-tilakone ---------- */
+  // Päälle kun positiivista jatkunut onDelay s, pois kun negatiivista offDelay s.
+  // Ajot ajoitetaan takautuvasti: alku = positiivisen jakson alku, loppu = negatiivisen jakson alku.
+  function Detector(opts) {
+    opts = opts || {};
+    this.onDelay = opts.onDelay != null ? opts.onDelay : 0.5;
+    this.offDelay = opts.offDelay != null ? opts.offDelay : 1.0;
+    this.maxGap = opts.maxGap != null ? opts.maxGap : 3.0; // isompi aukko kehysten välillä = keskeytys
+    this.reset();
+  }
+  Detector.prototype.reset = function () {
+    this.running = false; this.candStart = null; this.offStart = null; this.runStart = null; this.lastT = null;
+  };
+  // t sekunteina (tai ms/1000), raw = boolean. Palauttaa tapahtuman tai null:
+  // {type:'start', t} | {type:'end', start, end}
+  Detector.prototype.update = function (t, raw) {
+    var ev = null;
+    if (this.lastT != null && t - this.lastT > this.maxGap) {
+      // Mittaus katkesi (näyttö sammui tms.) – suljetaan ajo viimeiseen tunnettuun hetkeen
+      ev = this.forceEnd(this.lastT);
+      this.candStart = null; this.offStart = null;
+    }
+    this.lastT = t;
+    if (!this.running) {
+      if (raw) {
+        if (this.candStart == null) this.candStart = t;
+        if (t - this.candStart >= this.onDelay) {
+          this.running = true; this.runStart = this.candStart; this.offStart = null;
+          return ev || { type: 'start', t: this.runStart };
+        }
+      } else this.candStart = null;
+    } else {
+      if (!raw) {
+        if (this.offStart == null) this.offStart = t;
+        if (t - this.offStart >= this.offDelay) {
+          var e = { type: 'end', start: this.runStart, end: this.offStart };
+          this.running = false; this.runStart = null; this.offStart = null; this.candStart = null;
+          return e;
+        }
+      } else this.offStart = null;
+    }
+    return ev;
+  };
+  Detector.prototype.forceEnd = function (t) {
+    if (!this.running) { this.candStart = null; return null; }
+    var end = this.offStart != null ? this.offStart : t;
+    var e = { type: 'end', start: this.runStart, end: end };
+    this.running = false; this.runStart = null; this.offStart = null; this.candStart = null;
+    return e;
+  };
+  // Meneillään olevan ajon kesto hetkellä t
+  Detector.prototype.currentDuration = function (t) {
+    if (!this.running) return 0;
+    var end = this.offStart != null ? this.offStart : t;
+    return Math.max(0, end - this.runStart);
+  };
+
+  /* ---------- Loki ja CSV ---------- */
+  function dayKey(d) {
+    d = d instanceof Date ? d : new Date(d);
+    var m = d.getMonth() + 1, day = d.getDate();
+    return d.getFullYear() + '-' + (m < 10 ? '0' : '') + m + '-' + (day < 10 ? '0' : '') + day;
+  }
+  // sessions: [{toolId, start(ms), end(ms), manual}], tools: {id:{name, ahv, corr}}
+  function summarize(sessions, tools) {
+    var per = {};
+    sessions.forEach(function (s) {
+      var tool = tools[s.toolId]; if (!tool) return;
+      var p = per[s.toolId] || (per[s.toolId] = { toolId: s.toolId, name: tool.name, a: tool.ahv * (tool.corr || 1), t: 0, runs: 0 });
+      p.t += Math.max(0, (s.end - s.start) / 1000); p.runs++;
+    });
+    var list = Object.keys(per).map(function (k) { return per[k]; });
+    var A8 = a8(list);
+    return { perTool: list, A8: A8, points: totalPoints(list), status: status(A8) };
+  }
+  function csvEscape(v) { v = String(v == null ? '' : v); return /[";\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+  function fmtTime(ms) { var d = new Date(ms); function p(n) { return (n < 10 ? '0' : '') + n; } return p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds()); }
+  function num(x, dec) { return x.toFixed(dec).replace('.', ','); }
+  // Suomalainen Excel: puolipiste-erotin, desimaalipilkku
+  function toCsv(days, tools) {
+    var rows = [['Päivä', 'Työkalu', 'Alku', 'Loppu', 'Kesto (min)', 'a_hv valmistaja (m/s²)', 'Korjauskerroin', 'a_hv käytetty (m/s²)', 'Osa-altistus A(8) (m/s²)', 'Pisteet', 'Tapa']];
+    Object.keys(days).sort().forEach(function (k) {
+      days[k].forEach(function (s) {
+        var tool = tools[s.toolId] || { name: '(poistettu)', ahv: 0, corr: 1 };
+        var a = tool.ahv * (tool.corr || 1), t = (s.end - s.start) / 1000;
+        rows.push([k, tool.name, fmtTime(s.start), fmtTime(s.end), num(t / 60, 2), num(tool.ahv, 1), num(tool.corr || 1, 2), num(a, 2), num(a8([{ a: a, t: t }]), 2), num(points(a, t), 0), s.manual ? 'käsin' : 'mitattu']);
+      });
+      var sum = summarize(days[k], tools);
+      rows.push([k, 'YHTEENSÄ', '', '', num(sum.perTool.reduce(function (x, p) { return x + p.t; }, 0) / 60, 2), '', '', '', num(sum.A8, 2), num(sum.points, 0), '']);
+    });
+    return '\ufeff' + rows.map(function (r) { return r.map(csvEscape).join(';'); }).join('\r\n');
+  }
+  function fmtDur(sec) {
+    if (!isFinite(sec)) return '∞';
+    sec = Math.round(sec); var h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
+    return h ? h + ' h ' + m + ' min' : m ? m + ' min ' + s + ' s' : s + ' s';
+  }
+
+  return {
+    ACTION: ACTION, LIMIT: LIMIT, EIGHT_H_S: EIGHT_H_S,
+    sumA2T: sumA2T, a8: a8, points: points, totalPoints: totalPoints, remainingSec: remainingSec, status: status,
+    makeBands: makeBands, bandFeatures: bandFeatures, rmsDb: rmsDb, shape: shape, cosine: cosine,
+    buildProfile: buildProfile, thresholds: thresholds, classify: classify, Detector: Detector,
+    dayKey: dayKey, summarize: summarize, toCsv: toCsv, fmtDur: fmtDur
+  };
+});
+
+</script>
+<script>
+(function(){
+'use strict';
+var VERSION='20261113-1020';
+var $=function(id){return document.getElementById(id);};
+var FFT=2048, FRAME_MS=50;
+var KEY='tarinamittari.v1';
+var S=load();
+function load(){try{var s=JSON.parse(localStorage.getItem(KEY));if(s&&s.tools)return s;}catch(e){}return{tools:{},active:null,days:{},showPts:false,pending:null};}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){alert('Tallennus epäonnistui: '+e.message);}}
+function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
+function num(s){return parseFloat(String(s).replace(',','.'));}
+function f2(x,d){return (d==null?x.toFixed(2):x.toFixed(d)).replace('.',',');}
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function hhmm(ms,sec){var d=new Date(ms),p=function(n){return(n<10?'0':'')+n;};return p(d.getHours())+':'+p(d.getMinutes())+(sec?':'+p(d.getSeconds()):'');}
+function today(){return TM.dayKey(new Date());}
+function dayList(k){return S.days[k]||(S.days[k]=[]);}
+function aOf(t){return t.ahv*(t.corr||1);}
+
+// Keskeneräinen ajo edelliseltä kerralta (sovellus suljettiin kesken)
+if(S.pending){var pd=S.pending;if(pd.end-pd.start>=500&&S.tools[pd.toolId])dayList(TM.dayKey(pd.start)).push({toolId:pd.toolId,start:pd.start,end:pd.end,note:'keskeytyi'});S.pending=null;save();}
+
+/* ---------- Navigaatio ---------- */
+$('nav').addEventListener('click',function(e){var v=e.target.getAttribute('data-v');if(!v)return;
+  Array.prototype.forEach.call($('nav').children,function(b){b.classList.toggle('on',b===e.target);});
+  ['meas','tools','log','help'].forEach(function(x){$('v-'+x).classList.toggle('hidden',x!==v);});
+  if(v==='tools')renderTools();if(v==='log')renderLog();});
+
+/* ---------- Ääni ---------- */
+var A={ctx:null,stream:null,an:null,freq:null,time:null,bands:null};
+async function openMic(){
+  if(A.stream)return;
+  if(!window.isSecureContext||!navigator.mediaDevices)throw new Error('Mikrofoni vaatii https-osoitteen.');
+  A.stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
+  A.ctx=new (window.AudioContext||window.webkitAudioContext)();
+  if(A.ctx.state==='suspended')await A.ctx.resume();
+  var src=A.ctx.createMediaStreamSource(A.stream);
+  A.an=A.ctx.createAnalyser();A.an.fftSize=FFT;A.an.smoothingTimeConstant=0;A.an.minDecibels=-140;A.an.maxDecibels=0;
+  src.connect(A.an);
+  A.freq=new Float32Array(A.an.frequencyBinCount);A.time=new Float32Array(FFT);
+  A.bands=TM.makeBands(A.ctx.sampleRate,FFT,24);
+}
+function closeMic(){if(A.stream){A.stream.getTracks().forEach(function(t){t.stop();});}if(A.ctx)A.ctx.close();A.stream=A.ctx=A.an=null;}
+function readFrame(){A.an.getFloatFrequencyData(A.freq);A.an.getFloatTimeDomainData(A.time);return{rms:TM.rmsDb(A.time),bands:TM.bandFeatures(A.freq,A.bands)};}
+function lvlPct(db){return Math.max(0,Math.min(100,(db+80)/80*100));}
+
+/* ---------- Wake Lock ---------- */
+var wake=null;
+async function lockScreen(){try{if('wakeLock' in navigator){wake=await navigator.wakeLock.request('screen');}}catch(e){}}
+function unlockScreen(){if(wake){wake.release().catch(function(){});wake=null;}}
+
+/* ---------- Mittaus ---------- */
+var M={on:false,timer:null,det:null,toolId:null,lastFrame:null,hiddenAt:null,lastSave:0};
+$('startBtn').onclick=function(){M.on?stopMeas():startMeas();};
+async function startMeas(){
+  var t=S.tools[S.active];if(!t||!t.profile){alert('Valitse kalibroitu työkalu.');return;}
+  try{await openMic();}catch(e){alert('Mikrofonia ei saatu käyttöön: '+e.message);return;}
+  if(t.profile.sampleRate&&t.profile.sampleRate!==A.ctx.sampleRate)alert('Huom: äänen näytteenottotaajuus on muuttunut kalibroinnista. Kalibroi työkalu uudelleen, jos tunnistus on epävarma.');
+  M.det=new TM.Detector({onDelay:0.5,offDelay:1.0,maxGap:3});M.toolId=S.active;M.on=true;
+  await lockScreen();
+  M.timer=setInterval(tick,FRAME_MS);
+  $('startBtn').textContent='■ Lopeta mittaus';$('startBtn').classList.add('stop');$('toolSel').disabled=true;$('pauseNote').classList.add('hidden');
+  renderMeas();
+}
+function stopMeas(){
+  if(!M.on)return;clearInterval(M.timer);
+  var e=M.det.forceEnd(Date.now()/1000);if(e)commit(e);
+  M.on=false;S.pending=null;save();closeMic();unlockScreen();
+  $('startBtn').textContent='▶ Aloita mittaus';$('startBtn').classList.remove('stop');$('toolSel').disabled=false;
+  $('dot').className='dot';$('stateTxt').textContent='Ei mittausta';$('runTxt').innerHTML='&nbsp;';$('dbg').innerHTML='&nbsp;';$('lvl').style.width='0';
+  renderMeas();
+}
+function commit(e){
+  if(e.end-e.start<0.3)return;
+  var st=Math.round(e.start*1000),en=Math.round(e.end*1000);
+  dayList(TM.dayKey(st)).push({toolId:M.toolId,start:st,end:en});
+  S.pending=null;save();
+}
+function tick(){
+  if(document.hidden)return;
+  var t=S.tools[M.toolId];var now=Date.now()/1000;
+  var f=readFrame();var c=TM.classify(f,t.profile,t.sens||5);
+  var e=M.det.update(now,c.on);
+  if(e&&e.type==='end')commit(e);
+  if(M.det.running&&now*1000-M.lastSave>5000){M.lastSave=now*1000;S.pending={toolId:M.toolId,start:Math.round(M.det.runStart*1000),end:Math.round(now*1000)};save();}
+  $('dot').className='dot'+(M.det.running?' on':c.on?' cand':'');
+  $('stateTxt').textContent=M.det.running?'Kone käy':'Kuuntelee…';
+  $('runTxt').textContent=M.det.running?'Tämä ajo: '+TM.fmtDur(M.det.currentDuration(now)):'Tunnistus: '+(c.levelOk?'taso ✓':'taso ✗')+'  '+(c.spectralOk?'ääniprofiili ✓':'ääniprofiili ✗');
+  $('lvl').style.width=lvlPct(f.rms)+'%';$('lvlThr').style.left=lvlPct(c.levelThr)+'%';
+  $('dbg').textContent='Taso '+f.rms.toFixed(0)+' dB (raja '+c.levelThr.toFixed(0)+') · samankaltaisuus '+f2(c.simTool)+' · kaistat '+Math.round(c.presence*100)+' %';
+  if(!M.slow||now-M.slow>0.5){M.slow=now;renderMeas();}
+}
+document.addEventListener('visibilitychange',function(){
+  if(!M.on)return;
+  if(document.hidden){M.hiddenAt=Date.now();var e=M.det.forceEnd(Date.now()/1000);if(e)commit(e);}
+  else{lockScreen();M.det.reset();if(M.hiddenAt){var n=$('pauseNote');n.textContent='Mittaus oli tauolla '+TM.fmtDur((Date.now()-M.hiddenAt)/1000)+' (näyttö sammui tai sovellus oli taustalla). Sinä aikana käyttöä ei laskettu – lisää se tarvittaessa käsin Lokiin.';n.classList.remove('hidden');M.hiddenAt=null;}}
+});
+
+/* ---------- Mittausnäkymä ---------- */
+function sessionsWithLive(k){
+  var l=(S.days[k]||[]).slice();
+  if(M.on&&M.det&&M.det.running&&k===today()){var now=Date.now()/1000;l.push({toolId:M.toolId,start:M.det.runStart*1000,end:(M.det.offStart||now)*1000,live:true});}
+  return l;
+}
+function renderToolSel(){
+  var ids=Object.keys(S.tools);var cal=ids.filter(function(i){return S.tools[i].profile;});
+  $('noTools').classList.toggle('hidden',cal.length>0);$('startBtn').disabled=!cal.length;
+  if(!S.tools[S.active]||!S.tools[S.active].profile)S.active=cal[0]||null;
+  $('toolSel').innerHTML=cal.map(function(i){var t=S.tools[i];return'<option value="'+i+'"'+(i===S.active?' selected':'')+'>'+esc(t.name)+' ('+f2(aOf(t),1)+' m/s²)</option>';}).join('');
+  var t=S.tools[S.active];$('sens').value=t?(t.sens||5):5;$('sensV').textContent=$('sens').value;
+  $('mTool').innerHTML=ids.map(function(i){return'<option value="'+i+'">'+esc(S.tools[i].name)+'</option>';}).join('');
+}
+$('toolSel').onchange=function(){S.active=this.value;save();renderToolSel();renderMeas();};
+$('sens').oninput=function(){$('sensV').textContent=this.value;var t=S.tools[S.active];if(t){t.sens=+this.value;save();}};
+function renderMeas(){
+  var sum=TM.summarize(sessionsWithLive(today()),S.tools);
+  $('a8').textContent=f2(sum.A8);$('a8').className='a8 '+sum.status;
+  $('a8s').className=sum.status;$('a8s').textContent={ok:'alle toimenpidearvon',action:'toimenpidearvo ylittyy',limit:'RAJA-ARVO YLITTYY'}[sum.status];
+  $('a8p').style.left=Math.min(100,sum.A8/6*100)+'%';
+  $('pts').textContent=S.showPts?'Pisteet: '+Math.round(sum.points)+' / 100 (toimenpide) / 400 (raja)':'';
+  var t=S.tools[S.active];
+  if(t){var a=aOf(t);var ent=sum.perTool.map(function(p){return{a:p.a,t:p.t};});
+    var rA=TM.remainingSec(ent,a,TM.ACTION),rL=TM.remainingSec(ent,a,TM.LIMIT);
+    $('remain').innerHTML='Koneella <b>'+esc(t.name)+'</b> ('+f2(a,1)+' m/s²) jäljellä:<br>toimenpidearvoon <b class="'+(rA>0?'':'action')+'">'+TM.fmtDur(rA)+'</b> · raja-arvoon <b class="'+(rL>0?'':'limit')+'">'+TM.fmtDur(rL)+'</b>';}
+  else $('remain').textContent='';
+  $('todayT').innerHTML=sum.perTool.length?sum.perTool.map(function(p){return'<tr><td>'+esc(p.name)+'</td><td class="n">'+TM.fmtDur(p.t)+'</td><td class="n">'+p.runs+'</td><td class="n">'+f2(p.a,1)+'</td></tr>';}).join(''):'<tr><td colspan="4" class="mut">Ei käyttöä tänään.</td></tr>';
+}
+
+/* ---------- Työkalut ---------- */
+function renderTools(){
+  var ids=Object.keys(S.tools);
+  $('toolList').innerHTML=ids.map(function(i){var t=S.tools[i],q=t.profile&&t.profile.quality;
+    var qtxt=!t.profile?'<span class="limit">Ei kalibroitu</span>':(q.levelDiffDb<6?'<span class="action">Heikko erottuvuus ('+q.levelDiffDb.toFixed(0)+' dB) – kalibroi lähempänä konetta</span>':'<span class="ok">Kalibroitu, ero taustaan '+q.levelDiffDb.toFixed(0)+' dB</span>');
+    return'<div class="card"><h2>'+esc(t.name)+'</h2><div class="row"><div><label>a<sub>hv</sub> (m/s²)</label><input data-f="ahv" data-id="'+i+'" inputmode="decimal" value="'+f2(t.ahv,1)+'"></div><div><label>Korjauskerroin</label><input data-f="corr" data-id="'+i+'" inputmode="decimal" value="'+f2(t.corr||1,2)+'"></div></div>'+
+    '<p class="mut">Laskennassa käytetään '+f2(aOf(t),2)+' m/s². '+qtxt+'</p>'+
+    '<button class="btn pri" data-cal="'+i+'">'+(t.profile?'Kalibroi uudelleen':'Kalibroi')+'</button><button class="btn" data-ren="'+i+'">Nimeä</button><button class="btn dan" data-del="'+i+'">Poista</button></div>';}).join('');
+}
+$('toolList').addEventListener('change',function(e){var id=e.target.getAttribute('data-id'),f=e.target.getAttribute('data-f');if(!id)return;var v=num(e.target.value);
+  if(!(v>0)||v>100){alert('Anna positiivinen luku.');renderTools();return;}S.tools[id][f]=v;save();renderTools();renderToolSel();renderMeas();});
+$('toolList').addEventListener('click',function(e){var g=function(a){return e.target.getAttribute(a);};
+  if(g('data-cal'))calibrate(g('data-cal'));
+  if(g('data-ren')){var n=prompt('Uusi nimi',S.tools[g('data-ren')].name);if(n){S.tools[g('data-ren')].name=n.trim();save();renderTools();renderToolSel();}}
+  if(g('data-del')&&confirm('Poistetaanko työkalu? Lokin aiemmat merkinnät jäävät, mutta niitä ei enää lasketa.')){delete S.tools[g('data-del')];save();renderTools();renderToolSel();renderMeas();}});
+$('addTool').onclick=function(){
+  var n=$('nName').value.trim(),a=num($('nAhv').value),c=num($('nCorr').value);
+  if(!n){alert('Anna nimi.');return;}if(!(a>0)){alert('Anna valmistajan tärinäarvo m/s².');return;}if(!(c>0))c=1;
+  var id=uid();S.tools[id]={name:n,ahv:a,corr:c,sens:5,profile:null};save();$('nName').value='';$('nAhv').value='';$('nCorr').value='1,0';
+  renderTools();renderToolSel();calibrate(id);};
+
+/* ---------- Kalibrointi ---------- */
+var calStop=false;
+function sleep(ms){return new Promise(function(r){setTimeout(r,ms);});}
+async function record(sec,label){
+  var frames=[],t0=Date.now();
+  while(Date.now()-t0<sec*1000){if(calStop)throw new Error('peruttu');var f=readFrame();frames.push(f);$('calLvl').style.width=lvlPct(f.rms)+'%';$('calCount').textContent=Math.ceil(sec-(Date.now()-t0)/1000);await sleep(FRAME_MS);}
+  return frames;
+}
+async function countdown(n,txt){$('calTxt').innerHTML=txt;for(var i=n;i>0;i--){if(calStop)throw new Error('peruttu');$('calCount').textContent=i;await sleep(1000);}}
+function calButtons(html){$('calBtns').innerHTML=html;}
+async function calibrate(id){
+  if(M.on){alert('Lopeta mittaus ennen kalibrointia.');return;}
+  var t=S.tools[id];$('calTitle').textContent='Kalibrointi: '+t.name;calStop=false;$('calDlg').showModal();
+  calButtons('<button class="btn" id="calCancel">Peruuta</button>');$('calCancel').onclick=function(){calStop=true;};
+  try{
+    $('calTxt').textContent='Avataan mikrofoni…';await openMic();await lockScreen();
+    await countdown(3,'<b>1/2 Tausta.</b> Kone pois päältä, muuten normaali työmaan ääni. Pidä puhelin siinä, missä se on mittauksen aikana.');
+    $('calTxt').innerHTML='<b>Tallennetaan taustaa…</b>';var bg=await record(5);
+    await countdown(5,'<b>2/2 Kone.</b> Käynnistä kone nyt ja tee normaalia työtä (poraa) koko tallennuksen ajan.');
+    $('calTxt').innerHTML='<b>Tallennetaan konetta… pidä käynnissä!</b>';var tl=await record(5);
+    var tail=Math.floor(tl.length*0.1);tl=tl.slice(tail,tl.length-tail); // reunat pois
+    var p=TM.buildProfile(bg,tl);p.sampleRate=A.ctx.sampleRate;p.date=Date.now();
+    var q=p.quality;$('calCount').textContent='';
+    var warn=q.levelDiffDb<6?'<p class="action">Kone erottuu taustasta heikosti ('+q.levelDiffDb.toFixed(0)+' dB). Tunnistus voi olla epävarma – kokeile lähempänä konetta tai hiljaisemmalla taustalla.</p>':'<p class="ok">Hyvä: kone erottuu taustasta '+q.levelDiffDb.toFixed(0)+' dB.</p>';
+    $('calTxt').innerHTML=warn+'<p class="mut">Profiilin samankaltaisuus: kone '+f2(q.simTool)+', tausta '+f2(q.simBg)+' (mitä suurempi ero, sitä parempi).</p>';
+    calButtons('<button class="btn pri" id="calOk">Tallenna</button><button class="btn" id="calRedo">Uudestaan</button><button class="btn" id="calCancel2">Peruuta</button>');
+    $('calOk').onclick=function(){t.profile=p;S.active=id;save();closeCal();renderTools();renderToolSel();renderMeas();};
+    $('calRedo').onclick=function(){closeCal();calibrate(id);};$('calCancel2').onclick=closeCal;
+  }catch(e){if(e.message!=='peruttu')alert('Kalibrointi epäonnistui: '+e.message);closeCal();}
+}
+function closeCal(){calStop=true;$('calDlg').close();if(!M.on){closeMic();unlockScreen();}}
+
+/* ---------- Loki ---------- */
+$('logDay').value=today();$('logDay').onchange=renderLog;
+function selDay(){return $('logDay').value||today();}
+function renderLog(){
+  var k=selDay(),l=(S.days[k]||[]).map(function(s,i){return{s:s,i:i};}).sort(function(a,b){return a.s.start-b.s.start;});
+  $('logT').innerHTML=l.length?l.map(function(o){var s=o.s,t=S.tools[s.toolId];return'<tr><td>'+esc(t?t.name:'(poistettu)')+(s.manual?' <span class="mut">käsin</span>':'')+'</td><td>'+hhmm(s.start)+'–'+hhmm(s.end)+'</td><td class="n">'+TM.fmtDur((s.end-s.start)/1000)+'</td><td class="n"><button class="btn" data-ed="'+o.i+'">✎</button></td></tr>';}).join(''):'<tr><td colspan="4" class="mut">Ei merkintöjä.</td></tr>';
+  var sum=TM.summarize(S.days[k]||[],S.tools);
+  $('logSum').innerHTML='A(8) <b class="'+sum.status+'">'+f2(sum.A8)+' m/s²</b> · pisteet '+Math.round(sum.points)+' · '+sum.perTool.map(function(p){return esc(p.name)+' '+TM.fmtDur(p.t);}).join(', ');
+  renderToolSel();
+}
+var editIdx=null;
+function toTime(ms){return hhmm(ms,true);}
+function fromTime(k,v){var p=v.split(':');var d=new Date(k+'T00:00:00');d.setHours(+p[0],+p[1],+(p[2]||0),0);return d.getTime();}
+$('logT').addEventListener('click',function(e){var i=e.target.getAttribute('data-ed');if(i==null)return;editIdx=+i;var s=S.days[selDay()][editIdx];$('eStart').value=toTime(s.start);$('eEnd').value=toTime(s.end);$('editDlg').showModal();});
+$('eCancel').onclick=function(){$('editDlg').close();};
+$('eSave').onclick=function(){var k=selDay(),s=S.days[k][editIdx];var a=fromTime(k,$('eStart').value),b=fromTime(k,$('eEnd').value);if(!(b>a)){alert('Päättymisajan pitää olla alkamisen jälkeen.');return;}s.start=a;s.end=b;s.edited=true;save();$('editDlg').close();renderLog();renderMeas();};
+$('eDel').onclick=function(){if(!confirm('Poistetaanko käyttökerta?'))return;S.days[selDay()].splice(editIdx,1);save();$('editDlg').close();renderLog();renderMeas();};
+$('mAdd').onclick=function(){var k=selDay(),tid=$('mTool').value,min=num($('mMin').value);if(!tid){alert('Lisää ensin työkalu.');return;}if(!(min>0)){alert('Anna kesto minuutteina.');return;}
+  var st=$('mStart').value?fromTime(k,$('mStart').value):fromTime(k,'12:00');dayList(k).push({toolId:tid,start:st,end:st+min*60000,manual:true});save();$('mMin').value='';renderLog();renderMeas();};
+$('resetDay').onclick=function(){var k=selDay();if(confirm('Poistetaanko kaikki päivän '+k+' merkinnät?')){delete S.days[k];save();renderLog();renderMeas();}};
+function download(name,text){var b=new Blob([text],{type:'text/csv;charset=utf-8'});
+  var file=null;try{file=new File([b],name,{type:'text/csv'});}catch(e){}
+  if(file&&navigator.canShare&&navigator.canShare({files:[file]})&&confirm('Jaetaanko CSV (esim. sähköpostiin tai Driveen)? Peruuta = lataa puhelimeen.')){navigator.share({files:[file],title:name}).catch(function(){});return;}
+  var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},1000);}
+$('csvBtn').onclick=function(){download('tarina_kaikki_'+today()+'.csv',TM.toCsv(S.days,S.tools));};
+$('csvDayBtn').onclick=function(){var k=selDay(),o={};o[k]=S.days[k]||[];download('tarina_'+k+'.csv',TM.toCsv(o,S.tools));};
+
+/* ---------- Muut ---------- */
+$('showPts').checked=!!S.showPts;$('showPts').onchange=function(){S.showPts=this.checked;save();renderMeas();};
+$('ver').textContent=VERSION;
+window.addEventListener('pagehide',function(){if(M.on&&M.det&&M.det.running){S.pending={toolId:M.toolId,start:Math.round(M.det.runStart*1000),end:Date.now()};save();}});
+setInterval(function(){if(!M.on)renderMeas();},30000);
+renderToolSel();renderMeas();
+if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js').catch(function(){});
+if(!window.isSecureContext)$('pauseNote').textContent='Sivu ei ole https-osoitteessa, joten mikrofoni ei toimi.',$('pauseNote').classList.remove('hidden');
+})();
+</script>
+</body>
+</html>

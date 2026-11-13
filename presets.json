@@ -1,0 +1,17 @@
+{
+  "versio": "Humitor tärinätaulukko g, 13.11.2026",
+  "huom": "Korjauskerroin = 1 (Rikun päätös 13.11.2026: varmuuskertoimia ei käytetä). Lasku pelkällä a_hv:llä ilman K:ta. a_hv <= 2,5 ilmoitettu arvo lasketaan 2,5:nä. Hiltien AVR-malli ja TE 50:n sukupolvi vielä tarkistamatta arvokilvestä.",
+  "tyokalut": [
+    {"nimi": "Makita DTM52 (malli oletettu)", "tyyppi": "monitoimityökalu, akku 18 V LXT", "kayttotapa": "sahaus/hionta", "a_hv": 2.5, "a_hv_ilmoitettu": "<=2,5", "K": 1.5, "teho_W": null, "lahde": "Makita käyttöohje / makita.fi (EN 62841)"},
+    {"nimi": "Makita DHR242", "tyyppi": "poravasara, akku 18 V LXT", "kayttotapa": "piikkaus", "a_hv": 11.4, "K": 1.5, "teho_W": null, "lahde": "https://www.makita.fi/fi/product/dhr242 (EN 62841-2-6)"},
+    {"nimi": "Makita DHR242", "tyyppi": "poravasara, akku 18 V LXT", "kayttotapa": "iskuporaus betoniin", "a_hv": 15.0, "K": 1.5, "teho_W": null, "lahde": "https://www.makita.fi/fi/product/dhr242 (EN 62841-2-6)"},
+    {"nimi": "Hilti TE 30-AVR", "tyyppi": "poravasara, johdollinen", "kayttotapa": "piikkaus", "a_hv": 8.8, "K": 1.5, "teho_W": 1010, "lahde": "hilti.fi tuotesivu; teho Hilti 230 V -mallin sivu"},
+    {"nimi": "Hilti TE 30-AVR", "tyyppi": "poravasara, johdollinen", "kayttotapa": "iskuporaus betoniin", "a_hv": 9.7, "K": 1.5, "teho_W": 1010, "lahde": "hilti.fi tuotesivu; teho Hilti 230 V -mallin sivu"},
+    {"nimi": "Hilti TE 50-AVR", "tyyppi": "poravasara, johdollinen", "kayttotapa": "piikkaus", "a_hv": 7.1, "K": null, "teho_W": 1100, "lahde": "hilti.fi (sukupolvi 03, EN 62841); teho https://www.hilti.co.nz/c/CLS_POWER_TOOLS_7125/CLS_ROTARY_HAMMERS_7125/r4902202"},
+    {"nimi": "Hilti TE 50-AVR", "tyyppi": "poravasara, johdollinen", "kayttotapa": "iskuporaus betoniin", "a_hv": 8.8, "K": null, "teho_W": 1100, "lahde": "hilti.fi (sukupolvi 03, EN 62841); teho https://www.hilti.co.nz/c/CLS_POWER_TOOLS_7125/CLS_ROTARY_HAMMERS_7125/r4902202"},
+    {"nimi": "Bosch GSH 11 VC", "tyyppi": "piikkausvasara, johdollinen", "kayttotapa": "piikkaus", "a_hv": 7.6, "K": 1.5, "teho_W": 1700, "lahde": "https://www.bosch-professional.com/fi/fi/products/gsh-11-vc-0611336000"},
+    {"nimi": "Makita DSS501", "tyyppi": "pyörösaha, akku 18 V LXT", "kayttotapa": "puun sahaus", "a_hv": 2.5, "a_hv_ilmoitettu": "<=2,5", "K": 1.5, "teho_W": null, "lahde": "https://www.makita.fi/fi/product/dss501"},
+    {"nimi": "Makita DJR186", "tyyppi": "puukkosaha, akku 18 V LXT", "kayttotapa": "levyjen sahaus", "a_hv": 13.0, "K": 1.5, "teho_W": null, "lahde": "https://media.makita.co.nz/_media/user-manuals/D/DJR186-UG.pdf (EN 62841-2-11)"},
+    {"nimi": "Makita DJR186", "tyyppi": "puukkosaha, akku 18 V LXT", "kayttotapa": "puupalkkien sahaus", "a_hv": 12.5, "K": 1.5, "teho_W": null, "lahde": "https://media.makita.co.nz/_media/user-manuals/D/DJR186-UG.pdf (EN 62841-2-11)"}
+  ]
+}

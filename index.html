@@ -47,19 +47,26 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 .count{font-size:64px;font-weight:800;text-align:center;font-variant-numeric:tabular-nums}
 .hidden{display:none!important}
 ol,ul{padding-left:20px;margin:6px 0}li{margin:4px 0}
+#alertBox{position:fixed;left:8px;right:8px;top:8px;z-index:50;border-radius:14px;padding:14px;box-shadow:0 6px 30px rgba(0,0,0,.6);font-size:17px}
+#alertBox.action{background:#5a4206;border:2px solid var(--warn)}#alertBox.limit{background:#5c1414;border:2px solid var(--bad)}
+#alertBox b{display:block;font-size:20px;margin-bottom:4px}
+.pill{display:inline-block;padding:2px 8px;border-radius:8px;background:#252b34;font-size:13px;color:var(--mut)}
 </style>
 </head>
 <body>
+<div id="alertBox" class="hidden"><b id="alertTitle"></b><div id="alertTxt"></div><div style="margin-top:10px"><button id="alertAck" class="btn pri">Kuittaa</button></div></div>
 <header><h1>Tärinämittari <span class="mut">· käsi-käsivarsitärinä</span></h1>
-<nav id="nav"><button data-v="meas" class="on">Mittaa</button><button data-v="tools">Työkalut</button><button data-v="log">Loki</button><button data-v="help">Ohje</button></nav></header>
+<nav id="nav"><button data-v="meas" class="on">Mittaa</button><button data-v="tools">Työkalut</button><button data-v="log">Loki</button><button data-v="set">Asetukset</button><button data-v="help">Ohje</button></nav></header>
 <main>
 <!-- MITTAA -->
 <section id="v-meas">
-  <div class="note">Mittaus toimii vain, kun sovellus on auki ja näyttö päällä. Pidä puhelin lähellä konetta (esim. rintataskussa tai työtasolla). Tulos on arvio.</div>
+  <div class="note">Mittaus toimii vain, kun sovellus on auki ja näyttö päällä. Pidä puhelin samassa paikassa kuin kalibroidessa. Tulos on arvio.</div>
   <div id="noTools" class="note red hidden">Lisää ja kalibroi ensin työkalu Työkalut-välilehdellä.</div>
   <div class="card">
-    <label for="toolSel">Työkalu</label>
+    <label for="toolSel">Kone</label>
     <select id="toolSel"></select>
+    <label for="kohde">Kohde (lyhyt tunnus)</label>
+    <input id="kohde" maxlength="30" placeholder="esim. H16C5">
     <label for="sens">Herkkyys: <b id="sensV">5</b> <span class="mut">(suurempi = herkempi)</span></label>
     <input id="sens" type="range" min="1" max="10" step="1" value="5">
     <div style="height:12px"></div>
@@ -80,8 +87,8 @@ ol,ul{padding-left:20px;margin:6px 0}li{margin:4px 0}
     <div id="remain" style="margin-top:8px"></div>
   </div>
   <div class="card">
-    <h2>Tänään työkaluittain</h2>
-    <table><thead><tr><th>Työkalu</th><th class="n">Aika</th><th class="n">Kerrat</th><th class="n">a<sub>hv</sub></th></tr></thead><tbody id="todayT"></tbody></table>
+    <h2>Tänään koneittain</h2>
+    <table><thead><tr><th>Kone</th><th class="n">Liipaisin</th><th class="n">Kerrat</th><th class="n">a<sub>hv</sub></th></tr></thead><tbody id="todayT"></tbody></table>
   </div>
 </section>
 
@@ -89,13 +96,19 @@ ol,ul{padding-left:20px;margin:6px 0}li{margin:4px 0}
 <section id="v-tools" class="hidden">
   <div id="toolList"></div>
   <div class="card">
-    <h2>Uusi työkalu</h2>
-    <label>Nimi</label><input id="nName" placeholder="esim. Hilti TE 30 iskuporakone">
+    <h2>Uusi kone</h2>
+    <div id="presetWrap" class="hidden"><label>Valmis luettelo</label><select id="preset"></select></div>
+    <label>Nimi</label><input id="nName" placeholder="esim. Hilti TE 30-AVR">
+    <label>Käyttötapa</label><input id="nUse" placeholder="esim. iskuporaus betoniin">
     <div class="row">
-      <div><label>a<sub>hv</sub> valmistajalta (m/s²)</label><input id="nAhv" inputmode="decimal" placeholder="esim. 9,5"></div>
+      <div><label>a<sub>hv</sub> (m/s²)</label><input id="nAhv" inputmode="decimal" placeholder="esim. 9,7"></div>
+      <div><label>K (m/s², tieto)</label><input id="nK" inputmode="decimal"></div>
+    </div>
+    <div class="row">
+      <div><label>Teho (W, kWh-laskuun)</label><input id="nW" inputmode="numeric"></div>
       <div><label>Korjauskerroin</label><input id="nCorr" inputmode="decimal" value="1,0"></div>
     </div>
-    <p class="mut">Valmistajan arvo on mitattu laboratoriossa ja on usein todellista pienempi. Varovaisempi arvio: kerroin 1,5–2.</p>
+    <p id="nSrc" class="mut"></p>
     <button id="addTool" class="btn pri">Lisää ja kalibroi</button>
   </div>
 </section>
@@ -103,57 +116,91 @@ ol,ul{padding-left:20px;margin:6px 0}li{margin:4px 0}
 <!-- LOKI -->
 <section id="v-log" class="hidden">
   <div class="card">
-    <div class="row"><div><label>Päivä</label><input id="logDay" type="date"></div></div>
-    <div id="logSum" class="mut" style="margin-top:8px"></div>
+    <label>Päivä</label><input id="logDay" type="date">
+    <div id="logSum" style="margin-top:8px"></div>
   </div>
-  <div class="card"><h2>Käyttökerrat</h2>
-    <table><thead><tr><th>Työkalu</th><th>Klo</th><th class="n">Kesto</th><th></th></tr></thead><tbody id="logT"></tbody></table>
+  <div class="card"><h2>Työsuoritteet</h2>
+    <table><thead><tr><th>Kone / kohde</th><th>Klo</th><th class="n">Liipaisin</th><th></th></tr></thead><tbody id="logT"></tbody></table>
   </div>
-  <div class="card"><h2>Lisää aika käsin</h2>
-    <div class="row"><div><label>Työkalu</label><select id="mTool"></select></div>
-    <div><label>Alkoi klo</label><input id="mStart" type="time"></div>
-    <div><label>Kesto (min)</label><input id="mMin" inputmode="decimal" placeholder="esim. 12"></div></div>
+  <div class="card"><h2>Lisää käsin</h2>
+    <div class="row"><div><label>Kone</label><select id="mTool"></select></div><div><label>Kohde</label><input id="mKohde" maxlength="30"></div></div>
+    <div class="row"><div><label>Mittaustapa</label><select id="mMethod"><option value="kello">kello (arvioitu aika)</option><option value="energiamittari">energiamittari (kWh)</option></select></div>
+    <div><label>Alkoi klo</label><input id="mStart" type="time"></div></div>
+    <div class="row"><div id="mMinW"><label>Liipaisinaika (min)</label><input id="mMin" inputmode="decimal"></div>
+    <div id="mKwhW" class="hidden"><label>Kulutus (kWh)</label><input id="mKwh" inputmode="decimal"></div>
+    <div><label>Työsuorite kesto (min, valinn.)</label><input id="mWall" inputmode="decimal"></div></div>
+    <label>Huom</label><input id="mHuom" maxlength="120">
+    <p id="mKwhInfo" class="mut hidden">Liipaisinaika = kWh / (teho W / 1000). Tulos on alaraja-arvio (kone ei käy koko ajan täydellä teholla).</p>
     <button id="mAdd" class="btn pri" style="margin-top:10px">Lisää</button>
   </div>
-  <div class="card">
-    <button id="csvBtn" class="btn pri">Vie CSV (kaikki päivät)</button>
-    <button id="csvDayBtn" class="btn">Vie CSV (valittu päivä)</button>
+  <div class="card"><h2>Vienti</h2>
+    <button id="shareDay" class="btn pri">Jaa CSV (valittu päivä)</button>
+    <button id="shareAll" class="btn">Jaa CSV (kaikki päivät)</button>
+    <button id="mailDay" class="btn">Sähköposti</button>
+    <p class="mut">Jaa-painike avaa puhelimen jakovalikon (sähköposti, Drive, WhatsApp…). Sähköposti-painike lataa tiedoston ja avaa viestin valmiiksi täytettynä – liitä ladattu CSV viestiin.</p>
     <button id="resetDay" class="btn dan">Nollaa valittu päivä</button>
   </div>
 </section>
 
+<!-- ASETUKSET -->
+<section id="v-set" class="hidden">
+  <div class="card"><h2>Tiedot vientiin</h2>
+    <label>Työntekijän koodi (nimikirjaimet tai tunnus, ei koko nimeä)</label><input id="sKoodi" maxlength="12" placeholder="esim. RR">
+    <label>Lähetysosoite (valinnainen, täyttää sähköpostin vastaanottajan)</label><input id="sEmail" type="email" inputmode="email" placeholder="nimi@yritys.fi">
+  </div>
+  <div class="card"><h2>Hälytykset</h2>
+    <label><input id="sNotify" type="checkbox" style="width:auto"> Järjestelmäilmoitukset (lisäksi värinä, äänimerkki ja hälytys sovelluksessa)</label>
+    <p id="notifState" class="mut"></p>
+    <button id="notifBtn" class="btn">Salli ilmoitukset</button> <button id="testAlert" class="btn">Testaa hälytys</button>
+    <p class="mut">Hälytys: A(8) 2,0 (80 % toimenpidearvosta), 2,5, 4,0 (80 % raja-arvosta), 5,0 sekä kun aktiivisella koneella on alle 15 min raja-arvoon. Kukin kerran päivässä. Hälytykset toimivat vain kun sovellus on auki.</p>
+  </div>
+  <div class="card"><label><input id="showPts" type="checkbox" style="width:auto"> Näytä HSE-pisteet mittausnäkymässä</label></div>
+</section>
+
 <!-- OHJE -->
 <section id="v-help" class="hidden">
+  <div class="card"><h2>Kalibrointi</h2><ol>
+    <li><b>Tausta (8 s):</b> työmaan muut koneet päälle normaalisti – alipaineistaja, imuri, kuivaimet. Mitattava kone pois päältä.</li>
+    <li><b>Kone (8 s):</b> käynnistä mitattava kone normaalissa työssä. Taustakoneet edelleen päällä.</li>
+    <li>Sovellus tallentaa vain sen, miten mitattava kone eroaa taustasta. Taustan tasaiset koneet eivät laske aikaa.</li>
+    <li>Kun työmaan olot muuttuvat (uusi kone taustalle, eri huone): Työkalut → <b>Päivitä tausta</b>. Konetta ei tarvitse äänittää uudelleen.</li>
+    <li>Laatu: Hyvä / Kohtalainen / Heikko. Jos heikko, siirrä puhelin lähemmäs mitattavaa konetta tai kauemmas taustakoneista.</li></ol></div>
   <div class="card"><h2>Käyttö</h2><ol>
-    <li>Työkalut: lisää kone, sen valmistajan ilmoittama tärinäarvo a<sub>hv</sub> (m/s², käyttöohje tai CE-tiedot) ja korjauskerroin.</li>
-    <li>Kalibroi: ensin 5 s taustaääntä kone pois päältä, sitten 5 s konetta käynnissä tavallisessa työssä. Kalibroi samassa paikassa kuin puhelin on mitatessa.</li>
-    <li>Mittaa: valitse kone ja paina Aloita. Näyttö pysyy päällä. Vihreä pallo = kone käy.</li>
-    <li>Jos laskee liikaa (esim. puhetta tai muita koneita), pienennä herkkyyttä. Jos ei tunnista konetta, suurenna herkkyyttä tai kalibroi uudelleen.</li>
-    <li>Loki: tarkista ja korjaa ajat, lisää käsin unohtuneet ajat, vie CSV Exceliin.</li></ol></div>
-  <div class="card"><h2>Laskenta</h2>
-    <p>A(8) = √( Σ (a<sub>hv,i</sub> × kerroin)² × T<sub>i</sub> / 8 h )</p>
-    <p>Valtioneuvoston asetus 48/2005: <b>toimenpidearvo 2,5 m/s²</b> (altistusta on vähennettävä, terveystarkastukset), <b>raja-arvo 5 m/s²</b> (ei saa ylittää).</p>
-    <p>Pisteet (HSE-tapa): 100 p = toimenpidearvo, 400 p = raja-arvo. Pisteet voi laskea yhteen eri koneista.</p>
-    <label><input id="showPts" type="checkbox" style="width:auto"> Näytä pisteet mittausnäkymässä</label></div>
+    <li>Mittaa: valitse kone, kirjoita kohde ja paina Aloita. Näyttö pysyy päällä. Vihreä pallo = kone käy.</li>
+    <li>Jos laskee liikaa, pienennä herkkyyttä. Jos ei tunnista konetta, suurenna herkkyyttä tai kalibroi uudelleen.</li>
+    <li>Loki: korjaa liipaisinaikoja, lisää käsin (kello tai energiamittarin kWh), jaa CSV.</li></ol></div>
+  <div class="card"><h2>Laskentasäännöt</h2><ul>
+    <li>Laskennassa käytetään valmistajan ilmoittamaa a<sub>hv</sub>-arvoa ilman epävarmuutta K.</li>
+    <li>Jos ilmoitettu a<sub>hv</sub> ≤ 2,5 m/s², lasketaan 2,5 m/s².</li>
+    <li>Korjauskerroin oletuksena 1,0.</li>
+    <li>A(8) = √( Σ a<sub>hv,i</sub>² × T<sub>i</sub> / 8 h ), T = liipaisinaika (kone käy).</li>
+    <li>Energiamittarilla: T = kWh / (teho W / 1000) – alaraja-arvio.</li>
+    <li>Sallittu jäljellä oleva aika pyöristetään aina alaspäin täysiin minuutteihin.</li>
+    <li>VNa 48/2005: toimenpidearvo 2,5 m/s², raja-arvo 5 m/s². HSE-pisteet: 100 = toimenpidearvo, 400 = raja-arvo.</li></ul></div>
   <div class="card"><h2>Rajoitukset</h2><ul>
-    <li>Sovellus mittaa vain koneen käyntiajan äänen perusteella, ei itse tärinää. Todellinen tärinä riippuu terästä, materiaalista, otteesta ja koneen kunnosta.</li>
-    <li>Mittaus toimii vain sovellus auki ja näyttö päällä. Jos näyttö sammuu tai vaihdat sovellusta, mittaus keskeytyy ja käynnissä ollut ajo kirjataan siihen asti.</li>
-    <li>Tunnistetaan vain valittu työkalu. Lähellä käyvä samanlainen kone (toisen työntekijän pora) voi laskea mukaan.</li>
-    <li>Tiedot ovat vain tässä puhelimessa (selaimen muistissa). Vie CSV säännöllisesti talteen.</li></ul>
+    <li>Sovellus mittaa koneen käyntiajan äänestä, ei itse tärinää.</li>
+    <li>Mittaus ja hälytykset toimivat vain sovellus auki ja näyttö päällä.</li>
+    <li>Lähellä käyvä samanlainen kone (toisen työntekijän pora) voi laskea mukaan.</li>
+    <li>Tiedot ovat vain tässä puhelimessa. Jaa CSV säännöllisesti talteen.</li></ul>
     <p class="mut">Versio <span id="ver"></span></p></div>
 </section>
 </main>
 
 <dialog id="calDlg">
   <h2 id="calTitle" style="margin-top:0">Kalibrointi</h2>
-  <p id="calTxt"></p>
+  <div id="calTxt"></div>
   <div id="calCount" class="count"></div>
   <div class="meter"><i id="calLvl"></i></div>
   <div id="calBtns"></div>
 </dialog>
 <dialog id="editDlg">
-  <h2 style="margin-top:0">Muokkaa käyttökertaa</h2>
-  <div class="row"><div><label>Alkoi</label><input id="eStart" type="time" step="1"></div><div><label>Päättyi</label><input id="eEnd" type="time" step="1"></div></div>
+  <h2 style="margin-top:0">Muokkaa työsuoritetta</h2>
+  <div id="eInfo" class="mut"></div>
+  <div class="row"><div><label>Kohde</label><input id="eKohde" maxlength="30"></div>
+  <div><label>Mittaustapa</label><select id="eMethod"><option>ääni</option><option>energiamittari</option><option>kello</option></select></div></div>
+  <div class="row"><div><label>Liipaisinaika (min)</label><input id="eTrig" inputmode="decimal"></div><div><label>kWh</label><input id="eKwh" inputmode="decimal"></div></div>
+  <div class="row"><div><label>Työsuorite kesto (min)</label><input id="eWall" inputmode="decimal"></div></div>
+  <label>Huom</label><input id="eHuom" maxlength="120">
   <div style="margin-top:12px"><button id="eSave" class="btn pri">Tallenna</button><button id="eDel" class="btn dan">Poista</button><button id="eCancel" class="btn">Peruuta</button></div>
 </dialog>
 
@@ -228,68 +275,209 @@ ol,ul{padding-left:20px;margin:6px 0}li{margin:4px 0}
   }
   function median(arr) { var s = arr.slice().sort(function (a, b) { return a - b; }); var m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; }
 
-  // Kalibrointi: kehyslistat [{rms, bands}] taustasta ja koneesta
-  function buildProfile(bgFrames, toolFrames) {
-    if (!bgFrames.length || !toolFrames.length) throw new Error('Kalibrointinäyte puuttuu');
-    function avgBands(frames) {
-      var n = frames[0].bands.length, acc = new Array(n).fill(0);
-      frames.forEach(function (f) { for (var i = 0; i < n; i++) acc[i] += f.bands[i]; });
-      return acc.map(function (x) { return x / frames.length; });
+  function pct(arr, p) { var s = arr.slice().sort(function (a, b) { return a - b; }); var i = Math.min(s.length - 1, Math.max(0, Math.round(p * (s.length - 1)))); return s[i]; }
+  function db2p(d) { return Math.pow(10, d / 10); }
+  function p2db(p) { return 10 * Math.log10(p + 1e-20); }
+
+  /* ---------- Iskutaajuus (amplitudimodulaatio) ---------- */
+  // Lyhyet FFT:t (512 näytettä, hyppy 256) koko ikkunan yli. Kaistatehot painotetaan taustan käänteisellä
+  // teholla (taustan "valkaisu"), joten tasaiset taustakoneet eivät peitä iskuja. Verhokäyrän autokorrelaation
+  // huippu viiveillä 10–60 ms (iskutaajuus ~16–100 Hz): 0 = tasainen, 1 = vahvasti jaksollinen.
+  var _fftCache = {};
+  function fftPow(x, off, n) {
+    var c = _fftCache[n];
+    if (!c) {
+      c = _fftCache[n] = { re: new Float64Array(n), im: new Float64Array(n), win: new Float64Array(n), rev: new Uint32Array(n) };
+      for (var i = 0; i < n; i++) c.win[i] = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / n);
+      for (i = 0, j = 0; i < n; i++) { c.rev[i] = j; var bit = n >> 1; for (; j & bit; bit >>= 1) j ^= bit; j ^= bit; }
     }
-    var bgB = avgBands(bgFrames), toolB = avgBands(toolFrames);
-    var bgRms = median(bgFrames.map(function (f) { return f.rms; }));
-    var toolRms = median(toolFrames.map(function (f) { return f.rms; }));
-    var toolShape = shape(toolB), bgShape = shape(bgB);
-    // Laatumittari: kuinka hyvin koneen kehykset erottuvat taustasta
-    var simTool = mean(toolFrames.map(function (f) { return cosine(shape(f.bands), toolShape); }));
-    var simBgAsTool = mean(bgFrames.map(function (f) { return cosine(shape(f.bands), toolShape); }));
-    // Tunnusomaiset kaistat: joissa kone nostaa tasoa selvästi taustasta
-    var charBands = [];
-    for (var i = 0; i < toolB.length; i++) if (toolB[i] - bgB[i] >= 6) charBands.push(i);
+    var re = c.re, im = c.im, j;
+    for (i = 0; i < n; i++) { re[c.rev[i]] = x[off + i] * c.win[i]; im[c.rev[i]] = 0; }
+    for (var len = 2; len <= n; len <<= 1) {
+      var a = -2 * Math.PI / len, h = len >> 1;
+      for (var k = 0; k < h; k++) {
+        var cs = Math.cos(a * k), sn = Math.sin(a * k);
+        for (i = k; i < n; i += len) {
+          var r2 = re[i + h] * cs - im[i + h] * sn, i2 = re[i + h] * sn + im[i + h] * cs;
+          re[i + h] = re[i] - r2; im[i + h] = im[i] - i2; re[i] += r2; im[i] += i2;
+        }
+      }
+    }
+    var out = new Float64Array(n / 2);
+    for (i = 0; i < n / 2; i++) out[i] = re[i] * re[i] + im[i] * im[i];
+    return out;
+  }
+  // bandDefs: makeBands(sampleRate, fftSize) -tulos; bandW: paino per kaista (esim. 1/taustan teho)
+  function binWeights(sampleRate, bigFft, bandDefs, bandW, n) {
+    var w = new Float64Array(n / 2), binHz = sampleRate / n, bigHz = sampleRate / bigFft;
+    for (var b = 0; b < bandDefs.length; b++) {
+      var lo = bandDefs[b][0] * bigHz, hi = bandDefs[b][1] * bigHz;
+      for (var k = 1; k < n / 2; k++) { var f = k * binHz; if (f >= lo && f < hi) w[k] = Math.max(w[k], bandW ? bandW[b] : 1); }
+    }
+    // kapeissa matalissa kaistoissa ei välttämättä osu bin: käytetään lähintä
+    for (b = 0; b < bandDefs.length; b++) { var fc = (bandDefs[b][0] + bandDefs[b][1]) / 2 * bigHz, kk = Math.max(1, Math.round(fc / binHz)); if (kk < n / 2 && !w[kk]) w[kk] = bandW ? bandW[b] : 1; }
+    return w;
+  }
+  function amFeature(x, binW, n) {
+    n = n || 512; var hop = n >> 1, m = Math.floor((x.length - n) / hop) + 1;
+    if (m < 16) return 0;
+    var env = new Array(m), mu = 0;
+    for (var t = 0; t < m; t++) { var P = fftPow(x, t * hop, n), s = 0; for (var k = 1; k < P.length; k++) s += P[k] * binW[k]; env[t] = Math.log(s + 1e-30); mu += env[t]; }
+    mu /= m; var v = 0;
+    for (t = 0; t < m; t++) { env[t] -= mu; v += env[t] * env[t]; }
+    if (v <= 1e-12) return 0;
+    var best = 0, dtMs = hop / 48, lo = 2, hi = Math.min(Math.floor(m / 2), 12);
+    for (var lag = lo; lag <= hi; lag++) {
+      var c = 0; for (t = 0; t + lag < m; t++) c += env[t] * env[t + lag];
+      c = c / v * m / (m - lag); if (c > best) best = c;
+    }
+    return Math.max(0, Math.min(1, best));
+  }
+  // Painot taustan tehosta (dB tai teho) – valkaisu
+  function whiteWeights(bgDb) { return bgDb.map(function (d) { return 1 / db2p(d); }); }
+
+  /* ---------- Kalibrointi (versio 2: erotus taustasta) ---------- */
+  // Taustan tilastot kaistoittain: frames [{bands, am}]
+  function backgroundStats(frames) {
+    if (frames.length < 10) throw new Error('Taustanäyte liian lyhyt');
+    var nb = frames[0].bands.length, meanP = [], meanDb = [], p95 = [], std = [];
+    for (var b = 0; b < nb; b++) {
+      var col = frames.map(function (f) { return f.bands[b]; });
+      var mp = mean(col.map(db2p)); meanP.push(mp); meanDb.push(p2db(mp));
+      p95.push(pct(col, 0.95));
+      var md = mean(col); std.push(Math.sqrt(mean(col.map(function (x) { return (x - md) * (x - md); }))));
+    }
+    return { meanP: meanP, meanDb: meanDb, p95: p95, std: std, am: 0, am90: 0, n: frames.length, date: Date.now() };
+  }
+  // Koneen oma spektri = (kone + tausta) − tausta tehona
+  function toolStats(toolFrames, bg) {
+    if (toolFrames.length < 10) throw new Error('Konenäyte liian lyhyt');
+    var nb = toolFrames[0].bands.length, mixP = [], onlyP = [];
+    for (var b = 0; b < nb; b++) {
+      var mp = mean(toolFrames.map(function (f) { return db2p(f.bands[b]); }));
+      mixP.push(mp); onlyP.push(Math.max(mp - bg.meanP[b], mp * 1e-3));
+    }
+    return { mixP: mixP, onlyP: onlyP, am: 0 };
+  }
+  // Profiili taustasta + koneen omasta spektristä (tausta voidaan päivittää erikseen)
+  function buildProfile(bg, tool) {
+    var nb = bg.meanP.length, margin = [], disc = [];
+    for (var b = 0; b < nb; b++) margin.push(p2db(tool.onlyP[b] + bg.meanP[b]) - bg.p95[b]);
+    for (b = 0; b < nb; b++) if (margin[b] >= 6) disc.push(b);
+    if (disc.length < 3) { // otetaan parhaat kaistat, vaikka ero on pieni
+      disc = margin.map(function (m, i) { return [m, i]; }).filter(function (x) { return x[0] >= 2; })
+        .sort(function (a, b) { return b[0] - a[0]; }).slice(0, 3).map(function (x) { return x[1]; }).sort(function (a, b) { return a - b; });
+    }
+    var dm = disc.map(function (b) { return margin[b]; });
+    var meanMargin = dm.length ? mean(dm) : 0;
+    var impact = tool.am >= 0.3 && tool.am - bg.am90 >= 0.12;
+    var grade = disc.length >= 3 && meanMargin >= 10 ? 'hyva' : disc.length >= 3 && meanMargin >= 6 ? 'kohtalainen' : disc.length >= 2 ? 'heikko' : 'ei';
     return {
-      charBands: charBands,
-      bgRms: bgRms, toolRms: toolRms, bgBands: bgB, toolBands: toolB,
-      toolShape: toolShape, bgShape: bgShape,
-      quality: { levelDiffDb: toolRms - bgRms, simTool: simTool, simBg: simBgAsTool }
+      v: 2, bg: bg, tool: tool, disc: disc, margin: margin, impact: impact,
+      quality: { grade: grade, bands: disc.length, meanMarginDb: meanMargin, toolAm: tool.am, bgAm: bg.am90, impact: impact }
     };
   }
+  // Iskutaajuus kehyksille taustan valkaisupainoilla. cfg = {sampleRate, fftSize, bands}
+  function amOfFrames(frames, bgDb, cfg) {
+    var w = binWeights(cfg.sampleRate, cfg.fftSize, cfg.bands, whiteWeights(bgDb), 512);
+    return frames.map(function (f) { return f.win ? amFeature(f.win, w, 512) : 0; });
+  }
+  // Koko kalibrointi: tausta (muut koneet päällä) + kone taustan päällä
+  function calibrateProfile(bgFrames, toolFrames, cfg) {
+    var bg = backgroundStats(bgFrames);
+    var a = amOfFrames(bgFrames, bg.meanDb, cfg); bg.am = median(a); bg.am90 = pct(a, 0.9);
+    var tool = toolStats(toolFrames, bg);
+    tool.am = median(amOfFrames(toolFrames, bg.meanDb, cfg));
+    var p = buildProfile(bg, tool); p.sampleRate = cfg.sampleRate; p.date = Date.now(); return p;
+  }
+  // Vain taustan päivitys: koneen oma spektri ja iskutaajuus säilyvät
+  function updateBackground(profile, bgFrames, cfg) {
+    var bg = backgroundStats(bgFrames);
+    var a = amOfFrames(bgFrames, bg.meanDb, cfg); bg.am = median(a); bg.am90 = pct(a, 0.9);
+    var p = buildProfile(bg, profile.tool); p.sampleRate = cfg.sampleRate; p.date = profile.date; p.bgDate = Date.now(); return p;
+  }
+  function isV2(p) { return !!(p && p.v === 2 && p.disc); }
 
   // Herkkyys 1..10 (5 = oletus). Suurempi = herkempi.
   function thresholds(profile, sensitivity) {
     var s = Math.min(10, Math.max(1, sensitivity == null ? 5 : sensitivity));
-    var frac = 0.75 - (s - 1) * (0.6 / 9); // 0.75 .. 0.15 tasoerosta
-    var diff = Math.max(3, profile.toolRms - profile.bgRms);
-    var levelThr = profile.bgRms + diff * frac;
     var q = profile.quality;
-    // Samankaltaisuusraja kalibroinnin kehysten mukaan
-    var simRef = q.simTool;
-    var simThr = simRef - (0.05 + (s - 1) * 0.035); // 0.05 .. 0.365 alle koneen tyypillisen
-    var bandFrac = 0.7 - (s - 1) * (0.4 / 9); // 0.7 .. 0.3 kaistan tasoerosta
-    var presThr = 0.95 - (s - 1) * (0.25 / 9); // 0.95 .. 0.70 kaistoista
-    return { levelThr: levelThr, simThr: Math.max(-1, simThr), bandFrac: bandFrac, presThr: presThr };
+    return {
+      riseFrac: 0.65 - (s - 1) * (0.4 / 9),   // osuus odotetusta nousudB:stä kaistalla
+      presThr: 0.85 - (s - 1) * (0.3 / 9),    // osuus tunnusomaisista kaistoista
+      simThr: 0.55 - (s - 1) * (0.3 / 9),     // ylijäämäspektrin muoto vs koneen oma
+      amThr: profile.impact ? q.bgAm + (q.toolAm - q.bgAm) * (0.55 - (s - 1) * (0.3 / 9)) : null
+    };
   }
 
-  function presence(frame, profile, frac) {
-    var cb = profile.charBands || []; if (cb.length < 3) return 0;
-    var lit = 0;
-    for (var k = 0; k < cb.length; k++) {
-      var i = cb[k];
-      if (frame.bands[i] >= profile.bgBands[i] + (profile.toolBands[i] - profile.bgBands[i]) * frac) lit++;
+  /* ---------- Tunnistin: mukautuva taustataso ---------- */
+  function Recognizer(profile, sensitivity, opts) {
+    if (!isV2(profile)) throw new Error('Työkalu pitää kalibroida uudelleen');
+    opts = opts || {};
+    this.p = profile; this.th = thresholds(profile, sensitivity);
+    this.dt = opts.dt || 0.05;
+    this.floor = profile.bg.meanDb.slice();
+    this.spread = profile.bg.std.map(function (s) { return Math.min(6, Math.max(1, s)); });
+    this.tauUp = opts.tauUp || 8; this.tauDown = opts.tauDown || 2;
+    this.amHist = []; this.onHist = []; this.onTime = 0;
+    this.steadyWin = opts.steadyWin || 20; this.steadyStd = opts.steadyStd || 0.4;
+    this.drone = 0;
+    this.cfg = opts.cfg || null; this.binW = null; this.wAge = 1e9;
+  }
+  Recognizer.prototype.setSensitivity = function (s) { this.th = thresholds(this.p, s); };
+  Recognizer.prototype.process = function (frame) {
+    var p = this.p, th = this.th, nb = frame.bands.length, F = this.floor;
+    // Odotettu taso kun kone käy nykyisen taustan päällä
+    var lit = 0, wsum = 0, e = new Array(nb), x = new Array(nb), discE = 0;
+    for (var b = 0; b < nb; b++) {
+      var exp = p2db(p.tool.onlyP[b] + db2p(F[b]));
+      x[b] = Math.max(0, exp - F[b]);
+      e[b] = Math.max(0, frame.bands[b] - F[b] - this.spread[b]);
     }
-    return lit / cb.length;
-  }
-  // Yhden kehyksen luokittelu
-  function classify(frame, profile, sensitivity) {
-    var th = thresholds(profile, sensitivity);
-    var sh = shape(frame.bands);
-    var simTool = cosine(sh, profile.toolShape);
-    var simBg = cosine(sh, profile.bgShape);
-    var levelOk = frame.rms >= th.levelThr;
-    var pres = presence(frame, profile, th.bandFrac);
-    // Muoto täsmää TAI lähes kaikki koneen tunnusomaiset kaistat ovat koholla (kestää päälle puhumisen)
-    var spectralOk = (simTool >= th.simThr && simTool >= simBg - 0.02) || pres >= th.presThr;
-    return { on: levelOk && spectralOk, levelOk: levelOk, spectralOk: spectralOk, simTool: simTool, simBg: simBg, presence: pres, levelThr: th.levelThr, simThr: th.simThr };
-  }
+    for (var k = 0; k < p.disc.length; k++) {
+      b = p.disc[k]; var rise = x[b];
+      var need = Math.max(2 + this.spread[b], th.riseFrac * rise);
+      var w = Math.max(1, rise);
+      if (frame.bands[b] - F[b] >= need) lit += w;
+      wsum += w; discE += db2p(frame.bands[b]);
+    }
+    var presence = wsum ? lit / wsum : 0;
+    var sim = cosine(e, x);
+    var amv = frame.am || 0;
+    if (p.impact && this.cfg && frame.win) {
+      this.wAge += this.dt;
+      if (this.wAge > 2) { this.binW = binWeights(this.cfg.sampleRate, this.cfg.fftSize, this.cfg.bands, whiteWeights(F), 512); this.wAge = 0; }
+      amv = amFeature(frame.win, this.binW, 512);
+    }
+    this.amHist.push(amv); if (this.amHist.length > 7) this.amHist.shift();
+    var am = median(this.amHist);
+    var amOk = th.amThr == null || am >= th.amThr;
+    var on = presence >= th.presThr && sim >= th.simThr && amOk;
+    // Tasaisen koneen vartija: jos "käy" yli steadyWin s lähes muuttumattomana, se on taustakone
+    var dE = p2db(discE);
+    if (on && !p.impact) { // iskeville koneille iskutaajuus hoitaa tasaiset taustakoneet
+      this.onHist.push(dE); this.onTime += this.dt;
+      var maxN = Math.round(this.steadyWin / this.dt); if (this.onHist.length > maxN) this.onHist.shift();
+      if (this.onHist.length >= maxN) {
+        var m = mean(this.onHist), sd = Math.sqrt(mean(this.onHist.map(function (v) { return (v - m) * (v - m); })));
+        if (sd < this.steadyStd) { // sulautetaan taustaan
+          for (b = 0; b < nb; b++) F[b] = frame.bands[b];
+          this.onHist = []; this.onTime = 0; this.drone++; on = false;
+        }
+      }
+    } else { this.onHist = []; this.onTime = 0; }
+    // Taustan seuranta vain kun kone ei käy
+    if (!on) {
+      for (b = 0; b < nb; b++) {
+        var d = frame.bands[b] - F[b];
+        var a = this.dt / (d > 0 ? this.tauUp : this.tauDown);
+        F[b] += a * d;
+        var dev = Math.abs(frame.bands[b] - F[b]);
+        this.spread[b] = Math.min(6, Math.max(1, this.spread[b] + (this.dt / 10) * (dev - this.spread[b])));
+      }
+    }
+    return { on: on, presence: presence, sim: sim, am: am, amOk: amOk, presThr: th.presThr, simThr: th.simThr, amThr: th.amThr, drone: this.drone };
+  };
 
   /* ---------- Hystereesi-tilakone ---------- */
   // Päälle kun positiivista jatkunut onDelay s, pois kun negatiivista offDelay s.
@@ -354,47 +542,98 @@ ol,ul{padding-left:20px;margin:6px 0}li{margin:4px 0}
     var m = d.getMonth() + 1, day = d.getDate();
     return d.getFullYear() + '-' + (m < 10 ? '0' : '') + m + '-' + (day < 10 ? '0' : '') + day;
   }
-  // sessions: [{toolId, start(ms), end(ms), manual}], tools: {id:{name, ahv, corr}}
-  function summarize(sessions, tools) {
+  // Laskennassa käytetty a_hv: ilmoitettu ≤ 2,5 → 2,5; K:ta ei lisätä; × korjauskerroin (oletus 1,0)
+  function effA(tool) { return Math.max(ACTION, +tool.ahv || 0) * (tool.corr || 1); }
+  // Työsuorite (entry): {id, toolId, kohde, method:'ääni'|'energiamittari'|'kello', start, end (ms),
+  //   runs:[[alku,loppu] ms], kWh, minutes, trigMin (käsin korjattu liipaisinaika), wallMin, huom}
+  function runSec(e) { var s = 0; (e.runs || []).forEach(function (r) { s += Math.max(0, r[1] - r[0]) / 1000; }); return s; }
+  function triggerSec(e, tool) {
+    if (e.trigMin != null && e.trigMin !== '') return Math.max(0, +e.trigMin * 60);
+    if (e.method === 'energiamittari') return e.kWh > 0 && tool && tool.tehoW > 0 ? e.kWh / (tool.tehoW / 1000) * 3600 : 0;
+    if (e.method === 'kello') return Math.max(0, (+e.minutes || 0) * 60);
+    return runSec(e);
+  }
+  function wallSec(e) {
+    if (e.wallMin != null && e.wallMin !== '') return +e.wallMin * 60;
+    return e.end && e.start && e.end > e.start ? (e.end - e.start) / 1000 : null;
+  }
+  function summarize(entries, tools, liveExtraSec, liveToolId) {
     var per = {};
-    sessions.forEach(function (s) {
-      var tool = tools[s.toolId]; if (!tool) return;
-      var p = per[s.toolId] || (per[s.toolId] = { toolId: s.toolId, name: tool.name, a: tool.ahv * (tool.corr || 1), t: 0, runs: 0 });
-      p.t += Math.max(0, (s.end - s.start) / 1000); p.runs++;
-    });
+    function add(toolId, t, runs) {
+      var tool = tools[toolId]; if (!tool) return;
+      var p = per[toolId] || (per[toolId] = { toolId: toolId, name: tool.name, kayttotapa: tool.kayttotapa || '', a: effA(tool), t: 0, runs: 0 });
+      p.t += t; p.runs += runs;
+    }
+    entries.forEach(function (e) { add(e.toolId, triggerSec(e, tools[e.toolId]), e.method === 'ääni' && e.trigMin == null ? (e.runs || []).length : 1); });
+    if (liveExtraSec > 0 && liveToolId) add(liveToolId, liveExtraSec, 1);
     var list = Object.keys(per).map(function (k) { return per[k]; });
     var A8 = a8(list);
     return { perTool: list, A8: A8, points: totalPoints(list), status: status(A8) };
   }
-  function csvEscape(v) { v = String(v == null ? '' : v); return /[";\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
-  function fmtTime(ms) { var d = new Date(ms); function p(n) { return (n < 10 ? '0' : '') + n; } return p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds()); }
-  function num(x, dec) { return x.toFixed(dec).replace('.', ','); }
-  // Suomalainen Excel: puolipiste-erotin, desimaalipilkku
-  function toCsv(days, tools) {
-    var rows = [['Päivä', 'Työkalu', 'Alku', 'Loppu', 'Kesto (min)', 'a_hv valmistaja (m/s²)', 'Korjauskerroin', 'a_hv käytetty (m/s²)', 'Osa-altistus A(8) (m/s²)', 'Pisteet', 'Tapa']];
+  var STATUS_TXT = { ok: 'OK', action: 'toiminta-arvo ylittyy', limit: 'raja-arvo ylittyy' };
+  function csvEscape(v) { v = String(v == null ? '' : v); return /[";\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+  function num(x, dec) { return x == null || !isFinite(x) ? '' : x.toFixed(dec).replace('.', ','); }
+  var CSV_COLS = ['tyontekija_koodi', 'pvm', 'kohde', 'kone', 'kayttotapa', 'a_hv', 'korjauskerroin', 'liipaisinaika_min', 'A8_osuus', 'A8_paiva_yhteensa', 'tila', 'mittaustapa', 'kWh', 'tyosuorite_kesto_min', 'huom'];
+  // Excel (fi): UTF-8 BOM, puolipiste-erotin, desimaalipilkku, CRLF. Rivi = yksi työsuorite.
+  function toCsv(days, tools, settings) {
+    settings = settings || {};
+    var rows = [CSV_COLS];
     Object.keys(days).sort().forEach(function (k) {
-      days[k].forEach(function (s) {
-        var tool = tools[s.toolId] || { name: '(poistettu)', ahv: 0, corr: 1 };
-        var a = tool.ahv * (tool.corr || 1), t = (s.end - s.start) / 1000;
-        rows.push([k, tool.name, fmtTime(s.start), fmtTime(s.end), num(t / 60, 2), num(tool.ahv, 1), num(tool.corr || 1, 2), num(a, 2), num(a8([{ a: a, t: t }]), 2), num(points(a, t), 0), s.manual ? 'käsin' : 'mitattu']);
+      var list = (days[k] || []).slice().sort(function (a, b) { return (a.start || 0) - (b.start || 0); });
+      var day = summarize(list, tools);
+      list.forEach(function (e) {
+        var tool = tools[e.toolId] || { name: '(poistettu)', ahv: 0, corr: 1 };
+        var a = effA(tool), t = triggerSec(e, tool), w = wallSec(e);
+        var huom = [];
+        if (e.method === 'energiamittari' && e.kWh > 0 && e.trigMin == null) huom.push('liipaisinaika kWh:sta (alaraja-arvio)');
+        if (e.method === 'energiamittari' && !(tool.tehoW > 0)) huom.push('koneen teho puuttuu');
+        if (e.trigMin != null && e.method === 'ääni') huom.push('liipaisinaika korjattu käsin');
+        if (e.interrupted) huom.push('mittaus keskeytyi');
+        if (e.huom) huom.push(e.huom);
+        rows.push([settings.koodi || '', k, e.kohde || '', tool.name, tool.kayttotapa || '', num(a, 1), num(tool.corr || 1, 2),
+          num(t / 60, 1), num(a8([{ a: a, t: t }]), 2), num(day.A8, 2), STATUS_TXT[day.status], e.method || 'ääni',
+          e.kWh > 0 ? num(+e.kWh, 3) : '', w != null ? num(w / 60, 1) : '', huom.join('; ')]);
       });
-      var sum = summarize(days[k], tools);
-      rows.push([k, 'YHTEENSÄ', '', '', num(sum.perTool.reduce(function (x, p) { return x + p.t; }, 0) / 60, 2), '', '', '', num(sum.A8, 2), num(sum.points, 0), '']);
     });
-    return '\ufeff' + rows.map(function (r) { return r.map(csvEscape).join(';'); }).join('\r\n');
+    return '\ufeff' + rows.map(function (r) { return r.map(csvEscape).join(';'); }).join('\r\n') + '\r\n';
   }
   function fmtDur(sec) {
     if (!isFinite(sec)) return '∞';
     sec = Math.round(sec); var h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
     return h ? h + ' h ' + m + ' min' : m ? m + ' min ' + s + ' s' : s + ' s';
   }
+  // Sallittu jäljellä oleva aika pyöristetään AINA alaspäin täysiin minuutteihin
+  function fmtRemain(sec) {
+    if (!isFinite(sec)) return '∞';
+    var m = Math.floor(sec / 60); if (m <= 0) return '0 min';
+    var h = Math.floor(m / 60); m = m % 60;
+    return h ? h + ' h ' + m + ' min' : m + ' min';
+  }
+  function slug(s) { return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9_-]+/g, '').slice(0, 20); }
+  function csvName(dateStr, koodi, dateTo) { return 'tarinamittari_' + dateStr + (dateTo && dateTo !== dateStr ? '--' + dateTo : '') + (slug(koodi) ? '_' + slug(koodi) : '') + '.csv'; }
+  // Vanhan (v1) lokin muunnos: jokainen ajo omaksi työsuoritteekseen
+  function migrateDays(days) {
+    var out = {};
+    Object.keys(days || {}).forEach(function (k) {
+      out[k] = (days[k] || []).map(function (s, i) {
+        if (s.method) return s;
+        return s.manual ? { id: 'm' + k + i, toolId: s.toolId, method: 'kello', start: s.start, end: s.end, minutes: (s.end - s.start) / 60000, runs: [], kohde: '', huom: 'siirretty vanhasta versiosta' }
+          : { id: 'm' + k + i, toolId: s.toolId, method: 'ääni', start: s.start, end: s.end, runs: [[s.start, s.end]], kohde: '', interrupted: s.note === 'keskeytyi' };
+      });
+    });
+    return out;
+  }
 
   return {
-    ACTION: ACTION, LIMIT: LIMIT, EIGHT_H_S: EIGHT_H_S,
-    sumA2T: sumA2T, a8: a8, points: points, totalPoints: totalPoints, remainingSec: remainingSec, status: status,
+    ACTION: ACTION, LIMIT: LIMIT, EIGHT_H_S: EIGHT_H_S, CSV_COLS: CSV_COLS, STATUS_TXT: STATUS_TXT,
+    sumA2T: sumA2T, a8: a8, points: points, totalPoints: totalPoints, remainingSec: remainingSec, status: status, effA: effA,
     makeBands: makeBands, bandFeatures: bandFeatures, rmsDb: rmsDb, shape: shape, cosine: cosine,
-    buildProfile: buildProfile, thresholds: thresholds, classify: classify, Detector: Detector,
-    dayKey: dayKey, summarize: summarize, toCsv: toCsv, fmtDur: fmtDur
+    amFeature: amFeature, calibrateProfile: calibrateProfile, updateBackground: updateBackground, amOfFrames: amOfFrames,
+    binWeights: binWeights, whiteWeights: whiteWeights, db2p: db2p, p2db: p2db,
+    backgroundStats: backgroundStats, toolStats: toolStats, buildProfile: buildProfile, isV2: isV2, thresholds: thresholds,
+    Recognizer: Recognizer, Detector: Detector, pct: pct,
+    dayKey: dayKey, runSec: runSec, triggerSec: triggerSec, wallSec: wallSec, summarize: summarize, toCsv: toCsv,
+    fmtDur: fmtDur, fmtRemain: fmtRemain, csvName: csvName, migrateDays: migrateDays
   };
 });
 
@@ -402,33 +641,43 @@ ol,ul{padding-left:20px;margin:6px 0}li{margin:4px 0}
 <script>
 (function(){
 'use strict';
-var VERSION='20261113-1020';
+var VERSION='20261113-1049';
 var $=function(id){return document.getElementById(id);};
-var FFT=2048, FRAME_MS=50;
+var FFT=2048, WIN=8192, FRAME_MS=50, CAL_S=8;
 var KEY='tarinamittari.v1';
 var S=load();
-function load(){try{var s=JSON.parse(localStorage.getItem(KEY));if(s&&s.tools)return s;}catch(e){}return{tools:{},active:null,days:{},showPts:false,pending:null};}
+function load(){var s=null;try{s=JSON.parse(localStorage.getItem(KEY));}catch(e){}
+  if(!s||!s.tools)s={tools:{},active:null,days:{}};
+  if(s.v!==2){ // siirto vanhasta versiosta
+    s.days=TM.migrateDays(s.days);
+    Object.keys(s.tools).forEach(function(id){var t=s.tools[id];if(t.profile&&!TM.isV2(t.profile)){t.profile=null;t.needsRecal=true;}if(t.corr==null)t.corr=1;});
+    s.settings={koodi:'',email:'',notify:true,showPts:!!s.showPts};delete s.showPts;delete s.pending;s.alerts={};s.v=2;
+  }
+  s.settings=s.settings||{koodi:'',email:'',notify:true,showPts:false};s.alerts=s.alerts||{};
+  // Kesken jäänyt mittaus (sovellus suljettiin)
+  Object.keys(s.days).forEach(function(k){(s.days[k]||[]).forEach(function(e){if(e.open){if(e.curRun&&e.curRun[1]-e.curRun[0]>=500)e.runs.push(e.curRun);delete e.curRun;e.open=false;e.interrupted=true;}});});
+  return s;}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){alert('Tallennus epäonnistui: '+e.message);}}
+save();
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
 function num(s){return parseFloat(String(s).replace(',','.'));}
-function f2(x,d){return (d==null?x.toFixed(2):x.toFixed(d)).replace('.',',');}
-function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
-function hhmm(ms,sec){var d=new Date(ms),p=function(n){return(n<10?'0':'')+n;};return p(d.getHours())+':'+p(d.getMinutes())+(sec?':'+p(d.getSeconds()):'');}
+function f2(x,d){return x==null||!isFinite(x)?'':(x.toFixed(d==null?2:d)).replace('.',',');}
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function hhmm(ms){var d=new Date(ms),p=function(n){return(n<10?'0':'')+n;};return p(d.getHours())+':'+p(d.getMinutes());}
 function today(){return TM.dayKey(new Date());}
 function dayList(k){return S.days[k]||(S.days[k]=[]);}
-function aOf(t){return t.ahv*(t.corr||1);}
-
-// Keskeneräinen ajo edelliseltä kerralta (sovellus suljettiin kesken)
-if(S.pending){var pd=S.pending;if(pd.end-pd.start>=500&&S.tools[pd.toolId])dayList(TM.dayKey(pd.start)).push({toolId:pd.toolId,start:pd.start,end:pd.end,note:'keskeytyi'});S.pending=null;save();}
+function tname(t){return t?t.name+(t.kayttotapa?' – '+t.kayttotapa:''):'(poistettu)';}
+var STXT={ok:'OK',action:'toiminta-arvo ylittyy',limit:'raja-arvo ylittyy'};
 
 /* ---------- Navigaatio ---------- */
+var VIEWS=['meas','tools','log','set','help'];
 $('nav').addEventListener('click',function(e){var v=e.target.getAttribute('data-v');if(!v)return;
   Array.prototype.forEach.call($('nav').children,function(b){b.classList.toggle('on',b===e.target);});
-  ['meas','tools','log','help'].forEach(function(x){$('v-'+x).classList.toggle('hidden',x!==v);});
-  if(v==='tools')renderTools();if(v==='log')renderLog();});
+  VIEWS.forEach(function(x){$('v-'+x).classList.toggle('hidden',x!==v);});
+  if(v==='tools')renderTools();if(v==='log')renderLog();if(v==='set')renderSet();});
 
 /* ---------- Ääni ---------- */
-var A={ctx:null,stream:null,an:null,freq:null,time:null,bands:null};
+var A={ctx:null,stream:null,anF:null,anT:null,freq:null,cfg:null};
 async function openMic(){
   if(A.stream)return;
   if(!window.isSecureContext||!navigator.mediaDevices)throw new Error('Mikrofoni vaatii https-osoitteen.');
@@ -436,146 +685,198 @@ async function openMic(){
   A.ctx=new (window.AudioContext||window.webkitAudioContext)();
   if(A.ctx.state==='suspended')await A.ctx.resume();
   var src=A.ctx.createMediaStreamSource(A.stream);
-  A.an=A.ctx.createAnalyser();A.an.fftSize=FFT;A.an.smoothingTimeConstant=0;A.an.minDecibels=-140;A.an.maxDecibels=0;
-  src.connect(A.an);
-  A.freq=new Float32Array(A.an.frequencyBinCount);A.time=new Float32Array(FFT);
-  A.bands=TM.makeBands(A.ctx.sampleRate,FFT,24);
+  A.anF=A.ctx.createAnalyser();A.anF.fftSize=FFT;A.anF.smoothingTimeConstant=0;A.anF.minDecibels=-140;A.anF.maxDecibels=0;
+  A.anT=A.ctx.createAnalyser();A.anT.fftSize=WIN;A.anT.smoothingTimeConstant=0;
+  src.connect(A.anF);src.connect(A.anT);
+  A.freq=new Float32Array(A.anF.frequencyBinCount);
+  A.cfg={sampleRate:A.ctx.sampleRate,fftSize:FFT,bands:TM.makeBands(A.ctx.sampleRate,FFT,24)};
 }
-function closeMic(){if(A.stream){A.stream.getTracks().forEach(function(t){t.stop();});}if(A.ctx)A.ctx.close();A.stream=A.ctx=A.an=null;}
-function readFrame(){A.an.getFloatFrequencyData(A.freq);A.an.getFloatTimeDomainData(A.time);return{rms:TM.rmsDb(A.time),bands:TM.bandFeatures(A.freq,A.bands)};}
+function closeMic(){if(A.stream)A.stream.getTracks().forEach(function(t){t.stop();});if(A.ctx)A.ctx.close();A.stream=A.ctx=A.anF=A.anT=null;}
+function readFrame(){A.anF.getFloatFrequencyData(A.freq);var w=new Float32Array(WIN);A.anT.getFloatTimeDomainData(w);
+  return{rms:TM.rmsDb(w.subarray(WIN-FFT)),bands:TM.bandFeatures(A.freq,A.cfg.bands),win:w};}
 function lvlPct(db){return Math.max(0,Math.min(100,(db+80)/80*100));}
 
 /* ---------- Wake Lock ---------- */
 var wake=null;
-async function lockScreen(){try{if('wakeLock' in navigator){wake=await navigator.wakeLock.request('screen');}}catch(e){}}
+async function lockScreen(){try{if('wakeLock' in navigator)wake=await navigator.wakeLock.request('screen');}catch(e){}}
 function unlockScreen(){if(wake){wake.release().catch(function(){});wake=null;}}
 
+/* ---------- Hälytykset ---------- */
+var LEVELS=[{key:'a80',thr:2.0,cls:'action',title:'80 % toimenpidearvosta',msg:'Toimenpidearvo 2,5 m/s² lähestyy.'},
+ {key:'action',thr:2.5,cls:'action',title:'Toimenpidearvo ylittyi',msg:'Toimenpidearvo 2,5 m/s² on ylittynyt. Vähennä tärisevien koneiden käyttöä.'},
+ {key:'l80',thr:4.0,cls:'limit',title:'80 % raja-arvosta',msg:'Raja-arvo 5 m/s² lähestyy.'},
+ {key:'limit',thr:5.0,cls:'limit',title:'RAJA-ARVO YLITTYI',msg:'Raja-arvo 5 m/s² on ylittynyt. Lopeta tärisevien koneiden käyttö tältä päivältä.'}];
+var alertQueue=[];
+function fireAlert(key,cls,title,msg){
+  var k=today(),a=S.alerts[k]||(S.alerts[k]={});if(a[key])return;a[key]='shown';save();
+  alertQueue.push({key:key,cls:cls,title:title,msg:msg});showNextAlert();
+  try{if(navigator.vibrate)navigator.vibrate(cls==='limit'?[600,200,600,200,600,200,600]:[400,200,400,200,400]);}catch(e){}
+  beep(cls==='limit'?4:3);
+  if(S.settings.notify&&'Notification' in window&&Notification.permission==='granted'){
+    var opt={body:msg,tag:'tm-'+key,icon:'icon-192.png',badge:'icon-192.png',vibrate:[400,200,400],requireInteraction:true};
+    if(navigator.serviceWorker&&navigator.serviceWorker.controller)navigator.serviceWorker.ready.then(function(r){r.showNotification('Tärinämittari: '+title,opt);}).catch(function(){});
+    else try{new Notification('Tärinämittari: '+title,opt);}catch(e){}
+  }
+}
+function showNextAlert(){if(!$('alertBox').classList.contains('hidden')||!alertQueue.length)return;var x=alertQueue[0];
+  $('alertBox').className=x.cls;$('alertTitle').textContent=x.title;$('alertTxt').textContent=x.msg;}
+$('alertAck').onclick=function(){var x=alertQueue.shift();if(x){var a=S.alerts[today()]||(S.alerts[today()]={});a[x.key]='ack:'+new Date().toISOString();save();}
+  $('alertBox').className='hidden';showNextAlert();};
+function beep(n){try{var ctx=A.ctx||new (window.AudioContext||window.webkitAudioContext)();var t=ctx.currentTime+0.05;
+  for(var i=0;i<n;i++){var o=ctx.createOscillator(),g=ctx.createGain();o.frequency.value=1000;o.type='square';g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(0.4,t+0.02);g.gain.exponentialRampToValueAtTime(0.0001,t+0.25);o.connect(g);g.connect(ctx.destination);o.start(t);o.stop(t+0.3);t+=0.4;}
+  if(!A.ctx)setTimeout(function(){ctx.close();},n*500+500);}catch(e){}}
+function checkAlerts(sum,remLimitSec){
+  LEVELS.forEach(function(L){if(sum.A8>=L.thr)fireAlert(L.key,L.cls,L.title,'Päivän A(8) on nyt '+f2(sum.A8)+' m/s². '+L.msg);});
+  if(M.on&&remLimitSec!=null&&remLimitSec<15*60&&sum.A8<TM.LIMIT){var t=S.tools[M.toolId];
+    fireAlert('rem15','limit','Alle 15 min raja-arvoon','Koneella '+tname(t)+' on jäljellä '+TM.fmtRemain(remLimitSec)+' ennen raja-arvoa 5 m/s².');}
+}
+async function askNotify(){if(!('Notification' in window))return;if(Notification.permission==='default'){try{await Notification.requestPermission();}catch(e){}}renderSet();}
+
 /* ---------- Mittaus ---------- */
-var M={on:false,timer:null,det:null,toolId:null,lastFrame:null,hiddenAt:null,lastSave:0};
+var M={on:false,timer:null,det:null,rec:null,toolId:null,entry:null,hiddenAt:null,lastSave:0,slow:0};
 $('startBtn').onclick=function(){M.on?stopMeas():startMeas();};
 async function startMeas(){
-  var t=S.tools[S.active];if(!t||!t.profile){alert('Valitse kalibroitu työkalu.');return;}
+  var t=S.tools[S.active];if(!t||!TM.isV2(t.profile)){alert('Valitse kalibroitu kone.');return;}
+  if(S.settings.notify)askNotify();
   try{await openMic();}catch(e){alert('Mikrofonia ei saatu käyttöön: '+e.message);return;}
-  if(t.profile.sampleRate&&t.profile.sampleRate!==A.ctx.sampleRate)alert('Huom: äänen näytteenottotaajuus on muuttunut kalibroinnista. Kalibroi työkalu uudelleen, jos tunnistus on epävarma.');
-  M.det=new TM.Detector({onDelay:0.5,offDelay:1.0,maxGap:3});M.toolId=S.active;M.on=true;
+  if(t.profile.sampleRate&&t.profile.sampleRate!==A.ctx.sampleRate)alert('Huom: äänen näytteenottotaajuus on muuttunut kalibroinnista. Kalibroi kone uudelleen, jos tunnistus on epävarma.');
+  M.det=new TM.Detector({onDelay:0.5,offDelay:1.0,maxGap:3});
+  M.rec=new TM.Recognizer(t.profile,t.sens||5,{dt:FRAME_MS/1000,cfg:A.cfg});
+  M.toolId=S.active;M.on=true;S.lastKohde=$('kohde').value.trim();
+  var now=Date.now();M.entry={id:uid(),toolId:S.active,kohde:S.lastKohde,method:'ääni',start:now,end:now,runs:[],open:true};
+  dayList(TM.dayKey(now)).push(M.entry);save();
   await lockScreen();
   M.timer=setInterval(tick,FRAME_MS);
-  $('startBtn').textContent='■ Lopeta mittaus';$('startBtn').classList.add('stop');$('toolSel').disabled=true;$('pauseNote').classList.add('hidden');
+  $('startBtn').textContent='■ Lopeta mittaus';$('startBtn').classList.add('stop');$('toolSel').disabled=true;$('kohde').disabled=true;$('pauseNote').classList.add('hidden');
   renderMeas();
 }
 function stopMeas(){
   if(!M.on)return;clearInterval(M.timer);
-  var e=M.det.forceEnd(Date.now()/1000);if(e)commit(e);
-  M.on=false;S.pending=null;save();closeMic();unlockScreen();
-  $('startBtn').textContent='▶ Aloita mittaus';$('startBtn').classList.remove('stop');$('toolSel').disabled=false;
+  var e=M.det.forceEnd(Date.now()/1000);if(e)addRun(e);
+  M.entry.end=Date.now();M.entry.open=false;delete M.entry.curRun;
+  if(!M.entry.runs.length&&M.entry.end-M.entry.start<10000){var l=S.days[TM.dayKey(M.entry.start)];l.splice(l.indexOf(M.entry),1);} // tyhjä lyhyt mittaus pois
+  M.on=false;M.entry=null;save();closeMic();unlockScreen();
+  $('startBtn').textContent='▶ Aloita mittaus';$('startBtn').classList.remove('stop');$('toolSel').disabled=false;$('kohde').disabled=false;
   $('dot').className='dot';$('stateTxt').textContent='Ei mittausta';$('runTxt').innerHTML='&nbsp;';$('dbg').innerHTML='&nbsp;';$('lvl').style.width='0';
   renderMeas();
 }
-function commit(e){
-  if(e.end-e.start<0.3)return;
-  var st=Math.round(e.start*1000),en=Math.round(e.end*1000);
-  dayList(TM.dayKey(st)).push({toolId:M.toolId,start:st,end:en});
-  S.pending=null;save();
-}
+function addRun(e){if(e.end-e.start<0.3)return;M.entry.runs.push([Math.round(e.start*1000),Math.round(e.end*1000)]);M.entry.end=Date.now();delete M.entry.curRun;save();}
 function tick(){
   if(document.hidden)return;
-  var t=S.tools[M.toolId];var now=Date.now()/1000;
-  var f=readFrame();var c=TM.classify(f,t.profile,t.sens||5);
-  var e=M.det.update(now,c.on);
-  if(e&&e.type==='end')commit(e);
-  if(M.det.running&&now*1000-M.lastSave>5000){M.lastSave=now*1000;S.pending={toolId:M.toolId,start:Math.round(M.det.runStart*1000),end:Math.round(now*1000)};save();}
+  var now=Date.now()/1000,f=readFrame(),c=M.rec.process(f),e=M.det.update(now,c.on);
+  if(e&&e.type==='end')addRun(e);
+  if(now*1000-M.lastSave>5000){M.lastSave=now*1000;M.entry.end=Math.round(now*1000);if(M.det.running)M.entry.curRun=[Math.round(M.det.runStart*1000),Math.round(now*1000)];else delete M.entry.curRun;save();}
   $('dot').className='dot'+(M.det.running?' on':c.on?' cand':'');
   $('stateTxt').textContent=M.det.running?'Kone käy':'Kuuntelee…';
-  $('runTxt').textContent=M.det.running?'Tämä ajo: '+TM.fmtDur(M.det.currentDuration(now)):'Tunnistus: '+(c.levelOk?'taso ✓':'taso ✗')+'  '+(c.spectralOk?'ääniprofiili ✓':'ääniprofiili ✗');
-  $('lvl').style.width=lvlPct(f.rms)+'%';$('lvlThr').style.left=lvlPct(c.levelThr)+'%';
-  $('dbg').textContent='Taso '+f.rms.toFixed(0)+' dB (raja '+c.levelThr.toFixed(0)+') · samankaltaisuus '+f2(c.simTool)+' · kaistat '+Math.round(c.presence*100)+' %';
-  if(!M.slow||now-M.slow>0.5){M.slow=now;renderMeas();}
+  $('runTxt').textContent=M.det.running?'Tämä ajo: '+TM.fmtDur(M.det.currentDuration(now)):'Kaistat '+(c.presence>=c.presThr?'✓':'✗')+'  muoto '+(c.sim>=c.simThr?'✓':'✗')+(c.amThr!=null?'  iskut '+(c.amOk?'✓':'✗'):'');
+  $('lvl').style.width=Math.round(Math.min(1,c.presence)*100)+'%';$('lvlThr').style.left=Math.round(c.presThr*100)+'%';
+  $('dbg').textContent='Taso '+f.rms.toFixed(0)+' dB · kaistat '+Math.round(c.presence*100)+' % · muoto '+f2(c.sim)+(c.amThr!=null?' · iskut '+f2(c.am)+' (raja '+f2(c.amThr)+')':'')+(c.drone?' · taustakone suodatettu '+c.drone+'×':'');
+  if(now-M.slow>0.5){M.slow=now;renderMeas();}
 }
 document.addEventListener('visibilitychange',function(){
   if(!M.on)return;
-  if(document.hidden){M.hiddenAt=Date.now();var e=M.det.forceEnd(Date.now()/1000);if(e)commit(e);}
+  if(document.hidden){M.hiddenAt=Date.now();var e=M.det.forceEnd(Date.now()/1000);if(e)addRun(e);M.entry.interrupted=true;M.entry.end=Date.now();save();}
   else{lockScreen();M.det.reset();if(M.hiddenAt){var n=$('pauseNote');n.textContent='Mittaus oli tauolla '+TM.fmtDur((Date.now()-M.hiddenAt)/1000)+' (näyttö sammui tai sovellus oli taustalla). Sinä aikana käyttöä ei laskettu – lisää se tarvittaessa käsin Lokiin.';n.classList.remove('hidden');M.hiddenAt=null;}}
 });
+window.addEventListener('pagehide',function(){if(M.on){M.entry.end=Date.now();if(M.det.running)M.entry.curRun=[Math.round(M.det.runStart*1000),Date.now()];save();}});
 
 /* ---------- Mittausnäkymä ---------- */
-function sessionsWithLive(k){
-  var l=(S.days[k]||[]).slice();
-  if(M.on&&M.det&&M.det.running&&k===today()){var now=Date.now()/1000;l.push({toolId:M.toolId,start:M.det.runStart*1000,end:(M.det.offStart||now)*1000,live:true});}
-  return l;
-}
+function liveSec(){return M.on&&M.det&&M.det.running?M.det.currentDuration(Date.now()/1000):0;}
 function renderToolSel(){
-  var ids=Object.keys(S.tools);var cal=ids.filter(function(i){return S.tools[i].profile;});
-  $('noTools').classList.toggle('hidden',cal.length>0);$('startBtn').disabled=!cal.length;
-  if(!S.tools[S.active]||!S.tools[S.active].profile)S.active=cal[0]||null;
-  $('toolSel').innerHTML=cal.map(function(i){var t=S.tools[i];return'<option value="'+i+'"'+(i===S.active?' selected':'')+'>'+esc(t.name)+' ('+f2(aOf(t),1)+' m/s²)</option>';}).join('');
+  var ids=Object.keys(S.tools),cal=ids.filter(function(i){return TM.isV2(S.tools[i].profile);});
+  $('noTools').classList.toggle('hidden',cal.length>0);$('startBtn').disabled=!cal.length&&!M.on;
+  if(!S.tools[S.active]||!TM.isV2(S.tools[S.active].profile))S.active=cal[0]||null;
+  $('toolSel').innerHTML=cal.map(function(i){var t=S.tools[i];return'<option value="'+i+'"'+(i===S.active?' selected':'')+'>'+esc(tname(t))+' ('+f2(TM.effA(t),1)+' m/s²)</option>';}).join('');
   var t=S.tools[S.active];$('sens').value=t?(t.sens||5):5;$('sensV').textContent=$('sens').value;
-  $('mTool').innerHTML=ids.map(function(i){return'<option value="'+i+'">'+esc(S.tools[i].name)+'</option>';}).join('');
+  var mv=$('mTool').value;$('mTool').innerHTML=ids.map(function(i){return'<option value="'+i+'">'+esc(tname(S.tools[i]))+'</option>';}).join('');
+  $('mTool').value=mToolTouched&&S.tools[mv]?mv:(S.active||ids[0]||'');
 }
+var mToolTouched=false;$('mTool').onchange=function(){mToolTouched=true;};
 $('toolSel').onchange=function(){S.active=this.value;save();renderToolSel();renderMeas();};
-$('sens').oninput=function(){$('sensV').textContent=this.value;var t=S.tools[S.active];if(t){t.sens=+this.value;save();}};
+$('sens').oninput=function(){$('sensV').textContent=this.value;var t=S.tools[S.active];if(t){t.sens=+this.value;save();}if(M.rec)M.rec.setSensitivity(+this.value);};
+$('kohde').value=S.lastKohde||'';
 function renderMeas(){
-  var sum=TM.summarize(sessionsWithLive(today()),S.tools);
+  var sum=TM.summarize(S.days[today()]||[],S.tools,liveSec(),M.toolId);
   $('a8').textContent=f2(sum.A8);$('a8').className='a8 '+sum.status;
-  $('a8s').className=sum.status;$('a8s').textContent={ok:'alle toimenpidearvon',action:'toimenpidearvo ylittyy',limit:'RAJA-ARVO YLITTYY'}[sum.status];
+  $('a8s').className=sum.status;$('a8s').textContent=STXT[sum.status];
   $('a8p').style.left=Math.min(100,sum.A8/6*100)+'%';
-  $('pts').textContent=S.showPts?'Pisteet: '+Math.round(sum.points)+' / 100 (toimenpide) / 400 (raja)':'';
-  var t=S.tools[S.active];
-  if(t){var a=aOf(t);var ent=sum.perTool.map(function(p){return{a:p.a,t:p.t};});
-    var rA=TM.remainingSec(ent,a,TM.ACTION),rL=TM.remainingSec(ent,a,TM.LIMIT);
-    $('remain').innerHTML='Koneella <b>'+esc(t.name)+'</b> ('+f2(a,1)+' m/s²) jäljellä:<br>toimenpidearvoon <b class="'+(rA>0?'':'action')+'">'+TM.fmtDur(rA)+'</b> · raja-arvoon <b class="'+(rL>0?'':'limit')+'">'+TM.fmtDur(rL)+'</b>';}
+  $('pts').textContent=S.settings.showPts?'Pisteet: '+Math.round(sum.points)+' (100 = toimenpidearvo, 400 = raja-arvo)':'';
+  var t=S.tools[M.on?M.toolId:S.active],rL=null;
+  if(t){var a=TM.effA(t),ent=sum.perTool.map(function(p){return{a:p.a,t:p.t};});
+    var rA=TM.remainingSec(ent,a,TM.ACTION);rL=TM.remainingSec(ent,a,TM.LIMIT);
+    $('remain').innerHTML='Koneella <b>'+esc(tname(t))+'</b> ('+f2(a,1)+' m/s²) sallittua liipaisinaikaa jäljellä:<br>toimenpidearvoon <b class="'+(rA>=60?'':'action')+'">'+TM.fmtRemain(rA)+'</b> · raja-arvoon <b class="'+(rL>=60?'':'limit')+'">'+TM.fmtRemain(rL)+'</b>';}
   else $('remain').textContent='';
-  $('todayT').innerHTML=sum.perTool.length?sum.perTool.map(function(p){return'<tr><td>'+esc(p.name)+'</td><td class="n">'+TM.fmtDur(p.t)+'</td><td class="n">'+p.runs+'</td><td class="n">'+f2(p.a,1)+'</td></tr>';}).join(''):'<tr><td colspan="4" class="mut">Ei käyttöä tänään.</td></tr>';
+  $('todayT').innerHTML=sum.perTool.length?sum.perTool.map(function(p){return'<tr><td>'+esc(p.name)+'<br><span class="mut">'+esc(p.kayttotapa)+'</span></td><td class="n">'+TM.fmtDur(p.t)+'</td><td class="n">'+p.runs+'</td><td class="n">'+f2(p.a,1)+'</td></tr>';}).join(''):'<tr><td colspan="4" class="mut">Ei käyttöä tänään.</td></tr>';
+  checkAlerts(sum,rL);
 }
 
 /* ---------- Työkalut ---------- */
+var PRESETS=[];
+fetch('presets.json',{cache:'no-cache'}).then(function(r){return r.json();}).then(function(j){PRESETS=Array.isArray(j)?j:(j&&j.tyokalut)||[];
+  if(!PRESETS.length)return;$('presetWrap').classList.remove('hidden');
+  $('preset').innerHTML='<option value="">– valitse luettelosta –</option>'+PRESETS.map(function(p,i){return'<option value="'+i+'">'+esc(p.nimi+' – '+(p.kayttotapa||'')+' – '+(p.a_hv_ilmoitettu||f2(p.a_hv,1))+' m/s²')+'</option>';}).join('');}).catch(function(){});
+$('preset').onchange=function(){var p=PRESETS[this.value];if(!p)return;$('nName').value=p.nimi||'';$('nUse').value=p.kayttotapa||'';$('nAhv').value=p.a_hv!=null?f2(p.a_hv,1):'';
+  $('nK').value=p.K!=null?f2(p.K,1):'';$('nW').value=p.teho_W||'';$('nCorr').value='1,0';$('nSrc').textContent=[p.tyyppi,p.a_hv_ilmoitettu?'ilmoitettu '+p.a_hv_ilmoitettu:'',p.lahde?'Lähde: '+p.lahde:''].filter(Boolean).join(' · ');};
+function qualityTxt(p){if(!TM.isV2(p))return'<span class="limit">Ei kalibroitu'+'</span>';var q=p.quality;
+  var g={hyva:['ok','Hyvä'],kohtalainen:['action','Kohtalainen'],heikko:['limit','Heikko'],ei:['limit','Ei erotu']}[q.grade];
+  return'<span class="'+g[0]+'">Erottuvuus: '+g[1]+'</span> ('+q.bands+' kaistaa, keskim. '+q.meanMarginDb.toFixed(0)+' dB taustan yli'+(q.impact?', iskutunniste käytössä':'')+')';}
 function renderTools(){
-  var ids=Object.keys(S.tools);
-  $('toolList').innerHTML=ids.map(function(i){var t=S.tools[i],q=t.profile&&t.profile.quality;
-    var qtxt=!t.profile?'<span class="limit">Ei kalibroitu</span>':(q.levelDiffDb<6?'<span class="action">Heikko erottuvuus ('+q.levelDiffDb.toFixed(0)+' dB) – kalibroi lähempänä konetta</span>':'<span class="ok">Kalibroitu, ero taustaan '+q.levelDiffDb.toFixed(0)+' dB</span>');
-    return'<div class="card"><h2>'+esc(t.name)+'</h2><div class="row"><div><label>a<sub>hv</sub> (m/s²)</label><input data-f="ahv" data-id="'+i+'" inputmode="decimal" value="'+f2(t.ahv,1)+'"></div><div><label>Korjauskerroin</label><input data-f="corr" data-id="'+i+'" inputmode="decimal" value="'+f2(t.corr||1,2)+'"></div></div>'+
-    '<p class="mut">Laskennassa käytetään '+f2(aOf(t),2)+' m/s². '+qtxt+'</p>'+
-    '<button class="btn pri" data-cal="'+i+'">'+(t.profile?'Kalibroi uudelleen':'Kalibroi')+'</button><button class="btn" data-ren="'+i+'">Nimeä</button><button class="btn dan" data-del="'+i+'">Poista</button></div>';}).join('');
+  $('toolList').innerHTML=Object.keys(S.tools).map(function(i){var t=S.tools[i],p=t.profile;
+    return'<div class="card"><h2>'+esc(tname(t))+'</h2>'+(t.needsRecal?'<div class="note red">Uusi kalibrointitapa: kalibroi kone uudelleen taustakoneet päällä.</div>':'')+
+    '<div class="row"><div><label>a<sub>hv</sub> (m/s²)</label><input data-f="ahv" data-id="'+i+'" inputmode="decimal" value="'+f2(t.ahv,1)+'"></div><div><label>Korjauskerroin</label><input data-f="corr" data-id="'+i+'" inputmode="decimal" value="'+f2(t.corr||1,2)+'"></div><div><label>Teho (W)</label><input data-f="tehoW" data-id="'+i+'" inputmode="numeric" value="'+(t.tehoW||'')+'"></div></div>'+
+    '<p class="mut">Laskennassa '+f2(TM.effA(t),2)+' m/s²'+(t.K!=null?' (K '+f2(t.K,1)+' ei lisätä)':'')+'.</p><p>'+qualityTxt(p)+(p&&p.bgDate?' <span class="pill">tausta päivitetty '+new Date(p.bgDate).toLocaleString('fi-FI')+'</span>':'')+'</p>'+
+    '<button class="btn pri" data-cal="'+i+'">'+(p?'Kalibroi uudelleen':'Kalibroi')+'</button>'+(TM.isV2(p)?'<button class="btn" data-bg="'+i+'">Päivitä tausta</button>':'')+'<button class="btn" data-ren="'+i+'">Nimeä</button><button class="btn dan" data-del="'+i+'">Poista</button></div>';}).join('');
 }
 $('toolList').addEventListener('change',function(e){var id=e.target.getAttribute('data-id'),f=e.target.getAttribute('data-f');if(!id)return;var v=num(e.target.value);
-  if(!(v>0)||v>100){alert('Anna positiivinen luku.');renderTools();return;}S.tools[id][f]=v;save();renderTools();renderToolSel();renderMeas();});
+  if(f==='tehoW'&&e.target.value.trim()===''){S.tools[id].tehoW=null;save();return;}
+  if(!(v>0)||v>5000){alert('Anna positiivinen luku.');renderTools();return;}S.tools[id][f]=v;save();renderTools();renderToolSel();renderMeas();});
 $('toolList').addEventListener('click',function(e){var g=function(a){return e.target.getAttribute(a);};
-  if(g('data-cal'))calibrate(g('data-cal'));
+  if(g('data-cal'))calibrate(g('data-cal'),false);
+  if(g('data-bg'))calibrate(g('data-bg'),true);
   if(g('data-ren')){var n=prompt('Uusi nimi',S.tools[g('data-ren')].name);if(n){S.tools[g('data-ren')].name=n.trim();save();renderTools();renderToolSel();}}
-  if(g('data-del')&&confirm('Poistetaanko työkalu? Lokin aiemmat merkinnät jäävät, mutta niitä ei enää lasketa.')){delete S.tools[g('data-del')];save();renderTools();renderToolSel();renderMeas();}});
+  if(g('data-del')&&confirm('Poistetaanko kone? Lokin aiemmat merkinnät jäävät, mutta niitä ei enää lasketa.')){delete S.tools[g('data-del')];save();renderTools();renderToolSel();renderMeas();}});
 $('addTool').onclick=function(){
-  var n=$('nName').value.trim(),a=num($('nAhv').value),c=num($('nCorr').value);
-  if(!n){alert('Anna nimi.');return;}if(!(a>0)){alert('Anna valmistajan tärinäarvo m/s².');return;}if(!(c>0))c=1;
-  var id=uid();S.tools[id]={name:n,ahv:a,corr:c,sens:5,profile:null};save();$('nName').value='';$('nAhv').value='';$('nCorr').value='1,0';
-  renderTools();renderToolSel();calibrate(id);};
+  var n=$('nName').value.trim(),a=num($('nAhv').value),c=num($('nCorr').value),k=num($('nK').value),w=num($('nW').value);
+  if(!n){alert('Anna nimi.');return;}if(!(a>0)){alert('Anna valmistajan tärinäarvo a_hv (m/s²).');return;}if(!(c>0))c=1;
+  var p=PRESETS[$('preset').value]||{};
+  var id=uid();S.tools[id]={name:n,kayttotapa:$('nUse').value.trim(),ahv:a,K:k>0?k:null,tehoW:w>0?w:null,corr:c,tyyppi:p.tyyppi||'',lahde:p.lahde||'',sens:5,profile:null};
+  save();['nName','nUse','nAhv','nK','nW'].forEach(function(x){$(x).value='';});$('nCorr').value='1,0';$('nSrc').textContent='';$('preset').value='';
+  renderTools();renderToolSel();calibrate(id,false);};
 
 /* ---------- Kalibrointi ---------- */
 var calStop=false;
 function sleep(ms){return new Promise(function(r){setTimeout(r,ms);});}
-async function record(sec,label){
-  var frames=[],t0=Date.now();
+async function record(sec){var frames=[],t0=Date.now();
   while(Date.now()-t0<sec*1000){if(calStop)throw new Error('peruttu');var f=readFrame();frames.push(f);$('calLvl').style.width=lvlPct(f.rms)+'%';$('calCount').textContent=Math.ceil(sec-(Date.now()-t0)/1000);await sleep(FRAME_MS);}
-  return frames;
-}
-async function countdown(n,txt){$('calTxt').innerHTML=txt;for(var i=n;i>0;i--){if(calStop)throw new Error('peruttu');$('calCount').textContent=i;await sleep(1000);}}
+  return frames;}
+async function countdown(n,html){$('calTxt').innerHTML=html;for(var i=n;i>0;i--){if(calStop)throw new Error('peruttu');$('calCount').textContent=i;await sleep(1000);}}
 function calButtons(html){$('calBtns').innerHTML=html;}
-async function calibrate(id){
+var BG_TXT='<p><b>Tausta.</b> Pidä työmaan muut koneet (alipaineistaja, imuri, kuivaimet) päällä, mitattava kone pois. Pidä puhelin siinä, missä se on mittauksen aikana.</p>';
+async function calibrate(id,bgOnly){
   if(M.on){alert('Lopeta mittaus ennen kalibrointia.');return;}
-  var t=S.tools[id];$('calTitle').textContent='Kalibrointi: '+t.name;calStop=false;$('calDlg').showModal();
+  var t=S.tools[id];$('calTitle').textContent=(bgOnly?'Päivitä tausta: ':'Kalibrointi: ')+tname(t);calStop=false;$('calDlg').showModal();
   calButtons('<button class="btn" id="calCancel">Peruuta</button>');$('calCancel').onclick=function(){calStop=true;};
   try{
     $('calTxt').textContent='Avataan mikrofoni…';await openMic();await lockScreen();
-    await countdown(3,'<b>1/2 Tausta.</b> Kone pois päältä, muuten normaali työmaan ääni. Pidä puhelin siinä, missä se on mittauksen aikana.');
-    $('calTxt').innerHTML='<b>Tallennetaan taustaa…</b>';var bg=await record(5);
-    await countdown(5,'<b>2/2 Kone.</b> Käynnistä kone nyt ja tee normaalia työtä (poraa) koko tallennuksen ajan.');
-    $('calTxt').innerHTML='<b>Tallennetaan konetta… pidä käynnissä!</b>';var tl=await record(5);
-    var tail=Math.floor(tl.length*0.1);tl=tl.slice(tail,tl.length-tail); // reunat pois
-    var p=TM.buildProfile(bg,tl);p.sampleRate=A.ctx.sampleRate;p.date=Date.now();
-    var q=p.quality;$('calCount').textContent='';
-    var warn=q.levelDiffDb<6?'<p class="action">Kone erottuu taustasta heikosti ('+q.levelDiffDb.toFixed(0)+' dB). Tunnistus voi olla epävarma – kokeile lähempänä konetta tai hiljaisemmalla taustalla.</p>':'<p class="ok">Hyvä: kone erottuu taustasta '+q.levelDiffDb.toFixed(0)+' dB.</p>';
-    $('calTxt').innerHTML=warn+'<p class="mut">Profiilin samankaltaisuus: kone '+f2(q.simTool)+', tausta '+f2(q.simBg)+' (mitä suurempi ero, sitä parempi).</p>';
+    await countdown(5,(bgOnly?'':'<p class="mut">Vaihe 1/2</p>')+BG_TXT);
+    $('calTxt').innerHTML='<p><b>Tallennetaan taustaa…</b> Mitattava kone pois, muut koneet päällä.</p>';var bg=await record(CAL_S);
+    var p;
+    if(bgOnly){$('calTxt').innerHTML='<p>Lasketaan…</p>';await sleep(30);p=TM.updateBackground(t.profile,bg,A.cfg);}
+    else{
+      await countdown(5,'<p class="mut">Vaihe 2/2</p><p><b>Kone.</b> Käynnistä mitattava kone normaalissa työssä. Taustakoneet edelleen päällä.</p>');
+      $('calTxt').innerHTML='<p><b>Tallennetaan konetta… pidä käynnissä!</b></p>';var tl=await record(CAL_S);
+      tl=tl.slice(Math.round(1000/FRAME_MS)); // ensimmäinen sekunti pois (käynnistys)
+      $('calTxt').innerHTML='<p>Lasketaan…</p>';await sleep(30);
+      p=TM.calibrateProfile(bg,tl,A.cfg);
+    }
+    $('calCount').textContent='';var q=p.quality;
+    var adv={hyva:'<p class="ok">Hyvä: kone erottuu taustasta selvästi.</p>',kohtalainen:'<p class="action">Kohtalainen erottuvuus. Tunnistus toimii, mutta lähempänä konetta olisi varmempi.</p>',
+      heikko:'<p class="limit">Heikko erottuvuus. Siirrä puhelin lähemmäs mitattavaa konetta tai kauemmas taustakoneista ja kalibroi uudelleen.</p>',
+      ei:'<p class="limit">Kone ei erotu taustasta. Tunnistus ei toimi näin – kalibroi uudelleen lähempänä konetta.</p>'}[q.grade];
+    $('calTxt').innerHTML=adv+'<p class="mut">'+q.bands+' tunnusomaista kaistaa, keskimäärin '+q.meanMarginDb.toFixed(0)+' dB taustan yläpuolella. '+(q.impact?'Iskutunniste käytössä (iskut '+f2(q.toolAm)+' vs tausta '+f2(q.bgAm)+').':'Iskutunniste ei käytössä (kone ei iske tai iskut eivät erotu).')+'</p>';
     calButtons('<button class="btn pri" id="calOk">Tallenna</button><button class="btn" id="calRedo">Uudestaan</button><button class="btn" id="calCancel2">Peruuta</button>');
-    $('calOk').onclick=function(){t.profile=p;S.active=id;save();closeCal();renderTools();renderToolSel();renderMeas();};
-    $('calRedo').onclick=function(){closeCal();calibrate(id);};$('calCancel2').onclick=closeCal;
+    $('calOk').onclick=function(){t.profile=p;t.needsRecal=false;S.active=id;save();closeCal();renderTools();renderToolSel();renderMeas();};
+    $('calRedo').onclick=function(){closeCal();calibrate(id,bgOnly);};$('calCancel2').onclick=closeCal;
   }catch(e){if(e.message!=='peruttu')alert('Kalibrointi epäonnistui: '+e.message);closeCal();}
 }
 function closeCal(){calStop=true;$('calDlg').close();if(!M.on){closeMic();unlockScreen();}}
@@ -584,37 +885,70 @@ function closeCal(){calStop=true;$('calDlg').close();if(!M.on){closeMic();unlock
 $('logDay').value=today();$('logDay').onchange=renderLog;
 function selDay(){return $('logDay').value||today();}
 function renderLog(){
-  var k=selDay(),l=(S.days[k]||[]).map(function(s,i){return{s:s,i:i};}).sort(function(a,b){return a.s.start-b.s.start;});
-  $('logT').innerHTML=l.length?l.map(function(o){var s=o.s,t=S.tools[s.toolId];return'<tr><td>'+esc(t?t.name:'(poistettu)')+(s.manual?' <span class="mut">käsin</span>':'')+'</td><td>'+hhmm(s.start)+'–'+hhmm(s.end)+'</td><td class="n">'+TM.fmtDur((s.end-s.start)/1000)+'</td><td class="n"><button class="btn" data-ed="'+o.i+'">✎</button></td></tr>';}).join(''):'<tr><td colspan="4" class="mut">Ei merkintöjä.</td></tr>';
+  var k=selDay(),l=(S.days[k]||[]).map(function(e,i){return{e:e,i:i};}).sort(function(a,b){return(a.e.start||0)-(b.e.start||0);});
+  $('logT').innerHTML=l.length?l.map(function(o){var e=o.e,t=S.tools[e.toolId];var ts=TM.triggerSec(e,t);
+    return'<tr><td>'+esc(tname(t))+'<br><span class="mut">'+esc(e.kohde||'–')+' · '+esc(e.method)+(e.open?' · käynnissä':'')+(e.interrupted?' · keskeytyi':'')+'</span></td><td>'+hhmm(e.start)+(e.end>e.start?'–'+hhmm(e.end):'')+'</td><td class="n">'+TM.fmtDur(ts)+'</td><td class="n">'+(e.open?'':'<button class="btn" data-ed="'+o.i+'">✎</button>')+'</td></tr>';}).join(''):'<tr><td colspan="4" class="mut">Ei merkintöjä.</td></tr>';
   var sum=TM.summarize(S.days[k]||[],S.tools);
-  $('logSum').innerHTML='A(8) <b class="'+sum.status+'">'+f2(sum.A8)+' m/s²</b> · pisteet '+Math.round(sum.points)+' · '+sum.perTool.map(function(p){return esc(p.name)+' '+TM.fmtDur(p.t);}).join(', ');
-  renderToolSel();
+  $('logSum').innerHTML='A(8) <b class="'+sum.status+'">'+f2(sum.A8)+' m/s² – '+STXT[sum.status]+'</b><br><span class="mut">Pisteet '+Math.round(sum.points)+' · '+sum.perTool.map(function(p){return esc(p.name)+' '+TM.fmtDur(p.t);}).join(', ')+'</span>';
+  renderToolSel();$('mKohde').value=$('mKohde').value||S.lastKohde||'';
 }
 var editIdx=null;
-function toTime(ms){return hhmm(ms,true);}
-function fromTime(k,v){var p=v.split(':');var d=new Date(k+'T00:00:00');d.setHours(+p[0],+p[1],+(p[2]||0),0);return d.getTime();}
-$('logT').addEventListener('click',function(e){var i=e.target.getAttribute('data-ed');if(i==null)return;editIdx=+i;var s=S.days[selDay()][editIdx];$('eStart').value=toTime(s.start);$('eEnd').value=toTime(s.end);$('editDlg').showModal();});
+$('logT').addEventListener('click',function(ev){var i=ev.target.getAttribute('data-ed');if(i==null)return;editIdx=+i;var e=S.days[selDay()][editIdx],t=S.tools[e.toolId];
+  $('eInfo').textContent=tname(t)+' · '+hhmm(e.start)+(e.runs&&e.runs.length?' · '+e.runs.length+' mitattua ajoa':'');
+  $('eKohde').value=e.kohde||'';$('eMethod').value=e.method||'ääni';$('eTrig').value=f2(TM.triggerSec(e,t)/60,1);$('eKwh').value=e.kWh?f2(e.kWh,3):'';
+  var w=TM.wallSec(e);$('eWall').value=w!=null?f2(w/60,1):'';$('eHuom').value=e.huom||'';$('editDlg').showModal();});
 $('eCancel').onclick=function(){$('editDlg').close();};
-$('eSave').onclick=function(){var k=selDay(),s=S.days[k][editIdx];var a=fromTime(k,$('eStart').value),b=fromTime(k,$('eEnd').value);if(!(b>a)){alert('Päättymisajan pitää olla alkamisen jälkeen.');return;}s.start=a;s.end=b;s.edited=true;save();$('editDlg').close();renderLog();renderMeas();};
-$('eDel').onclick=function(){if(!confirm('Poistetaanko käyttökerta?'))return;S.days[selDay()].splice(editIdx,1);save();$('editDlg').close();renderLog();renderMeas();};
-$('mAdd').onclick=function(){var k=selDay(),tid=$('mTool').value,min=num($('mMin').value);if(!tid){alert('Lisää ensin työkalu.');return;}if(!(min>0)){alert('Anna kesto minuutteina.');return;}
-  var st=$('mStart').value?fromTime(k,$('mStart').value):fromTime(k,'12:00');dayList(k).push({toolId:tid,start:st,end:st+min*60000,manual:true});save();$('mMin').value='';renderLog();renderMeas();};
-$('resetDay').onclick=function(){var k=selDay();if(confirm('Poistetaanko kaikki päivän '+k+' merkinnät?')){delete S.days[k];save();renderLog();renderMeas();}};
-function download(name,text){var b=new Blob([text],{type:'text/csv;charset=utf-8'});
-  var file=null;try{file=new File([b],name,{type:'text/csv'});}catch(e){}
-  if(file&&navigator.canShare&&navigator.canShare({files:[file]})&&confirm('Jaetaanko CSV (esim. sähköpostiin tai Driveen)? Peruuta = lataa puhelimeen.')){navigator.share({files:[file],title:name}).catch(function(){});return;}
-  var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},1000);}
-$('csvBtn').onclick=function(){download('tarina_kaikki_'+today()+'.csv',TM.toCsv(S.days,S.tools));};
-$('csvDayBtn').onclick=function(){var k=selDay(),o={};o[k]=S.days[k]||[];download('tarina_'+k+'.csv',TM.toCsv(o,S.tools));};
+$('eSave').onclick=function(){var k=selDay(),e=S.days[k][editIdx],t=S.tools[e.toolId];
+  var old=TM.triggerSec(e,t)/60;e.kohde=$('eKohde').value.trim();e.method=$('eMethod').value;e.huom=$('eHuom').value.trim();
+  var kwh=num($('eKwh').value);e.kWh=kwh>0?kwh:null;
+  if(e.method==='energiamittari'&&!(e.kWh>0)){alert('Anna kulutus kWh.');return;}
+  if(e.method==='energiamittari'&&!(t&&t.tehoW>0)){alert('Koneelle ei ole tehoa (W). Lisää teho Työkalut-välilehdellä.');return;}
+  var tr=num($('eTrig').value);
+  if(e.method==='kello'){if(!(tr>=0)){alert('Anna liipaisinaika minuutteina.');return;}e.minutes=tr;delete e.trigMin;}
+  else if(e.method==='ääni'){if(tr>=0&&Math.abs(tr-old)>0.05)e.trigMin=tr;}
+  else delete e.trigMin;
+  var w=num($('eWall').value);if(w>=0&&(TM.wallSec(e)==null||Math.abs(w-TM.wallSec(e)/60)>0.05))e.wallMin=w;
+  save();$('editDlg').close();renderLog();renderMeas();};
+$('eDel').onclick=function(){if(!confirm('Poistetaanko työsuorite?'))return;S.days[selDay()].splice(editIdx,1);save();$('editDlg').close();renderLog();renderMeas();};
+$('mMethod').onchange=function(){var en=this.value==='energiamittari';$('mKwhW').classList.toggle('hidden',!en);$('mKwhInfo').classList.toggle('hidden',!en);$('mMinW').classList.toggle('hidden',en);};
+function fromTime(k,v){var p=(v||'12:00').split(':');var d=new Date(k+'T00:00:00');d.setHours(+p[0],+p[1],0,0);return d.getTime();}
+$('mAdd').onclick=function(){var k=selDay(),tid=$('mTool').value,t=S.tools[tid],meth=$('mMethod').value;if(!t){alert('Lisää ensin kone.');return;}
+  var st=fromTime(k,$('mStart').value),e={id:uid(),toolId:tid,kohde:$('mKohde').value.trim(),method:meth,start:st,end:st,runs:[],huom:$('mHuom').value.trim()};
+  if(meth==='kello'){var min=num($('mMin').value);if(!(min>0)){alert('Anna liipaisinaika minuutteina.');return;}e.minutes=min;}
+  else{var kwh=num($('mKwh').value);if(!(kwh>0)){alert('Anna kulutus kWh.');return;}if(!(t.tehoW>0)){alert('Koneelle ei ole tehoa (W). Lisää teho Työkalut-välilehdellä.');return;}e.kWh=kwh;}
+  var w=num($('mWall').value);if(w>0){e.wallMin=w;e.end=st+w*60000;}
+  dayList(k).push(e);save();['mMin','mKwh','mWall','mHuom'].forEach(function(x){$(x).value='';});renderLog();renderMeas();};
+$('resetDay').onclick=function(){var k=selDay();if(confirm('Poistetaanko kaikki päivän '+k+' merkinnät?')){if(M.on&&TM.dayKey(M.entry.start)===k){alert('Lopeta mittaus ensin.');return;}delete S.days[k];delete S.alerts[k];save();renderLog();renderMeas();}};
+function dlFile(name,text){var b=new Blob([text],{type:'text/csv;charset=utf-8'});var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},1000);}
+function csvFor(all){var days={},k=selDay(),keys;if(all){keys=Object.keys(S.days).filter(function(x){return(S.days[x]||[]).length;}).sort();keys.forEach(function(x){days[x]=S.days[x];});}else{keys=[k];days[k]=S.days[k]||[];}
+  return{name:TM.csvName(keys[0]||k,S.settings.koodi,keys[keys.length-1]),text:TM.toCsv(days,S.tools,{koodi:S.settings.koodi})};}
+async function share(all){var c=csvFor(all);var file=null;try{file=new File([c.text],c.name,{type:'text/csv'});}catch(e){}
+  if(file&&navigator.canShare&&navigator.canShare({files:[file]})){try{await navigator.share({files:[file],title:c.name,text:'Tärinäaltistus '+c.name});return;}catch(e){if(e.name==='AbortError')return;}}
+  dlFile(c.name,c.text);alert('Tiedosto ladattiin puhelimen Lataukset-kansioon: '+c.name);}
+$('shareDay').onclick=function(){share(false);};$('shareAll').onclick=function(){share(true);};
+$('mailDay').onclick=function(){var c=csvFor(false),k=selDay(),sum=TM.summarize(S.days[k]||[],S.tools);dlFile(c.name,c.text);
+  var body='Tärinäaltistus '+k+(S.settings.koodi?' / '+S.settings.koodi:'')+'\nA(8) '+f2(sum.A8)+' m/s² – '+STXT[sum.status]+'\n'+sum.perTool.map(function(p){return p.name+' '+p.kayttotapa+': '+f2(p.t/60,1)+' min';}).join('\n')+'\n\nLiitteenä '+c.name+' (ladattu puhelimen Lataukset-kansioon, liitä tiedosto tähän viestiin).';
+  location.href='mailto:'+encodeURIComponent(S.settings.email||'')+'?subject='+encodeURIComponent('Tärinämittari '+k+(S.settings.koodi?' '+S.settings.koodi:''))+'&body='+encodeURIComponent(body);};
 
-/* ---------- Muut ---------- */
-$('showPts').checked=!!S.showPts;$('showPts').onchange=function(){S.showPts=this.checked;save();renderMeas();};
+/* ---------- Asetukset ---------- */
+function renderSet(){$('sKoodi').value=S.settings.koodi||'';$('sEmail').value=S.settings.email||'';$('sNotify').checked=!!S.settings.notify;$('showPts').checked=!!S.settings.showPts;
+  var p='Notification' in window?Notification.permission:'unsupported';
+  $('notifState').textContent={granted:'Ilmoitukset sallittu.',denied:'Ilmoitukset estetty – salli ne Chromen sivustoasetuksista.',default:'Ilmoituksia ei ole vielä sallittu (kysytään ensimmäisen mittauksen alussa).',unsupported:'Tämä selain ei tue ilmoituksia.'}[p];
+  $('notifBtn').classList.toggle('hidden',p!=='default');}
+$('sKoodi').onchange=function(){S.settings.koodi=this.value.trim().replace(/[^\wÅÄÖåäö.-]/g,'').slice(0,12);this.value=S.settings.koodi;save();};
+$('sEmail').onchange=function(){S.settings.email=this.value.trim();save();};
+$('sNotify').onchange=function(){S.settings.notify=this.checked;save();if(this.checked)askNotify();};
+$('notifBtn').onclick=askNotify;
+$('testAlert').onclick=function(){var k='test'+Date.now();fireAlert(k,'action','Testihälytys','Näin hälytys näkyy. Kuittaa painamalla Kuittaa.');};
+$('showPts').onchange=function(){S.settings.showPts=this.checked;save();renderMeas();};
+
+/* ---------- Käynnistys ---------- */
 $('ver').textContent=VERSION;
-window.addEventListener('pagehide',function(){if(M.on&&M.det&&M.det.running){S.pending={toolId:M.toolId,start:Math.round(M.det.runStart*1000),end:Date.now()};save();}});
 setInterval(function(){if(!M.on)renderMeas();},30000);
 renderToolSel();renderMeas();
+if(Object.keys(S.tools).some(function(i){return S.tools[i].needsRecal;})){var n=$('pauseNote');n.textContent='Sovellus päivittyi: kalibrointi tehdään nyt taustakoneet päällä. Kalibroi koneet uudelleen Työkalut-välilehdellä. Aiemmat lokimerkinnät ovat tallessa.';n.classList.remove('hidden');}
 if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js').catch(function(){});
-if(!window.isSecureContext)$('pauseNote').textContent='Sivu ei ole https-osoitteessa, joten mikrofoni ei toimi.',$('pauseNote').classList.remove('hidden');
+if(!window.isSecureContext){$('pauseNote').textContent='Sivu ei ole https-osoitteessa, joten mikrofoni ei toimi.';$('pauseNote').classList.remove('hidden');}
 })();
 </script>
 </body>

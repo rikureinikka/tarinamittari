@@ -51,6 +51,22 @@ ol,ul{padding-left:20px;margin:6px 0}li{margin:4px 0}
 #alertBox.action{background:#5a4206;border:2px solid var(--warn)}#alertBox.limit{background:#5c1414;border:2px solid var(--bad)}
 #alertBox b{display:block;font-size:20px;margin-bottom:4px}
 .pill{display:inline-block;padding:2px 8px;border-radius:8px;background:#252b34;font-size:13px;color:var(--mut)}
+#calDlg{width:min(96vw,540px);padding:18px 18px 16px;max-height:96vh;overflow:auto}
+#calDlg h2{font-size:22px;line-height:1.25;margin:0 0 6px}
+#calToolName{font-size:17px;font-weight:700;margin:0 0 12px}
+#calStepLab{font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);margin:0 0 4px}
+#calHead{font-size:28px;font-weight:800;margin:0 0 8px;line-height:1.15}
+#calTxt{font-size:18px;line-height:1.4}
+#calTxt p{margin:0 0 10px}
+#calCount{font-size:80px;line-height:1;margin:8px 0 4px}
+#calDlg .meter{height:18px;border-radius:9px;margin:10px 0 6px}
+#calDlg .check{list-style:none;padding:0;margin:0 0 14px}
+#calDlg .check li{position:relative;padding:12px 12px 12px 40px;margin:0 0 8px;background:#0e1115;border-radius:12px;font-size:17px;line-height:1.35}
+#calDlg .check li::before{content:"✓";position:absolute;left:14px;top:12px;color:var(--ok);font-weight:800;font-size:18px}
+#calHint{margin:10px 0 0;font-size:17px;font-weight:600}
+#calBtns{margin-top:14px}
+#calBtns button.big{margin-bottom:8px}
+#calLvlLab{font-size:13px;color:var(--mut)}
 </style>
 </head>
 <body>
@@ -160,11 +176,15 @@ ol,ul{padding-left:20px;margin:6px 0}li{margin:4px 0}
 <!-- OHJE -->
 <section id="v-help" class="hidden">
   <div class="card"><h2>Kalibrointi</h2><ol>
-    <li><b>Tausta (8 s):</b> työmaan muut koneet päälle normaalisti – alipaineistaja, imuri, kuivaimet. Mitattava kone pois päältä.</li>
-    <li><b>Kone (8 s):</b> käynnistä mitattava kone normaalissa työssä. Taustakoneet edelleen päällä.</li>
-    <li>Sovellus tallentaa vain sen, miten mitattava kone eroaa taustasta. Taustan tasaiset koneet eivät laske aikaa.</li>
-    <li>Kun työmaan olot muuttuvat (uusi kone taustalle, eri huone): Työkalut → <b>Päivitä tausta</b>. Konetta ei tarvitse äänittää uudelleen.</li>
-    <li>Laatu: Hyvä / Kohtalainen / Heikko. Jos heikko, siirrä puhelin lähemmäs mitattavaa konetta tai kauemmas taustakoneista.</li></ol></div>
+    <li>Valitse kone ja paina <b>Kalibroi</b>. Tarkista lista: taustakoneet päällä, mitattava kone pois, puhelin samalla etäisyydellä kuin mittauksessa (esimerkiksi taskussa tai rintataskussa). Paina <b>Aloita</b>.</li>
+    <li><b>Vaihe 1/2 Vain tausta (8 s):</b> odota. Pidä työmaan muut koneet päällä normaalisti (alipaineistaja, imuri, kuivaimet). Mitattava kone pois päältä.</li>
+    <li>Seuraavaksi lyhyt 3–2–1: <b>käynnistä kone ja tee normaalia työtä</b>. Taustakoneet pysyvät päällä.</li>
+    <li><b>Vaihe 2/2 Kone käy (8 s):</b> pidä kone käynnissä. Jos näkyy „Ääni ei erotu taustasta”, vie puhelin lähemmäs konetta.</li>
+    <li>Lopuksi näet laatuarvioinnin: <b>Hyvä</b>, <b>Kohtalainen</b> tai <b>Heikko</b> sekä ohjeen, kannattaako jatkaa vai tehdä kalibrointi uudelleen. Hyvä: <b>Valmis – aloita mittaus</b>.</li>
+    <li>Sovellus tallentaa vain sen, miten mitattava kone eroaa taustasta. Taustan tasaiset koneet eivät laske aikaa.</li></ol></div>
+  <div class="card"><h2>Päivitä tausta</h2>
+    <p>Kun työmaan äänet muuttuvat – esimerkiksi kun uusi kone käynnistyy taustalle tai siirryt toiseen tilaan – avaa Työkalut ja paina <b>Päivitä tausta</b>.</p>
+    <p>Äänitä vain uusi tausta (8 s, mitattava kone pois). Konetta ei tarvitse äänittää uudelleen.</p></div>
   <div class="card"><h2>Käyttö</h2><ol>
     <li>Mittaa: valitse kone, kirjoita kohde ja paina Aloita. Näyttö pysyy päällä. Vihreä pallo = kone käy.</li>
     <li>Jos laskee liikaa, pienennä herkkyyttä. Jos ei tunnista konetta, suurenna herkkyyttä tai kalibroi uudelleen.</li>
@@ -187,10 +207,17 @@ ol,ul{padding-left:20px;margin:6px 0}li{margin:4px 0}
 </main>
 
 <dialog id="calDlg">
-  <h2 id="calTitle" style="margin-top:0">Kalibrointi</h2>
+  <h2 id="calTitle">Kalibrointi</h2>
+  <div id="calToolName"></div>
+  <div id="calStepLab" class="hidden"></div>
+  <div id="calHead" class="hidden"></div>
   <div id="calTxt"></div>
-  <div id="calCount" class="count"></div>
-  <div class="meter"><i id="calLvl"></i></div>
+  <div id="calCount" class="count hidden"></div>
+  <div id="calMeterWrap" class="hidden">
+    <div id="calLvlLab" class="mut">Äänen taso</div>
+    <div class="meter"><i id="calLvl"></i></div>
+  </div>
+  <div id="calHint" class="note red hidden"></div>
   <div id="calBtns"></div>
 </dialog>
 <dialog id="editDlg">
@@ -624,6 +651,49 @@ ol,ul{padding-left:20px;margin:6px 0}li{margin:4px 0}
     return out;
   }
 
+  /* ---------- Ohjattu kalibrointi (käyttöliittymän tilakone) ---------- */
+  // Ei muuta tunnistusmatematiikkaa: vain vaihejärjestys, ajat ja vinkki äänitasosta.
+  var CAL_HINT_DB = 4, CAL_HINT_AFTER = 2, CAL_HINT_WIN = 20;
+  function CalWizard(opts) {
+    opts = opts || {};
+    this.mode = opts.mode === 'bg' ? 'bg' : 'full';
+    this.calSec = opts.calSec != null ? opts.calSec : 8;
+    this.transSec = opts.transSec != null ? opts.transSec : 3;
+    this.hintDb = opts.hintDb != null ? opts.hintDb : CAL_HINT_DB;
+    this.hintAfter = opts.hintAfter != null ? opts.hintAfter : CAL_HINT_AFTER;
+    this.state = 'prep';
+    this.bgRms = [];
+    this.toolRms = [];
+  }
+  CalWizard.prototype.sequence = function () {
+    return this.mode === 'bg' ? ['prep', 'bg', 'result'] : ['prep', 'bg', 'transition', 'tool', 'result'];
+  };
+  CalWizard.prototype.advance = function () {
+    var seq = this.sequence(), i = seq.indexOf(this.state);
+    if (i < 0 || i >= seq.length - 1) return this.state;
+    this.state = seq[i + 1];
+    if (this.state === 'bg') { this.bgRms = []; this.toolRms = []; }
+    if (this.state === 'tool') this.toolRms = [];
+    return this.state;
+  };
+  CalWizard.prototype.cancel = function () { this.state = 'cancelled'; return this.state; };
+  CalWizard.prototype.noteBg = function (rms) { if (isFinite(rms)) this.bgRms.push(rms); };
+  CalWizard.prototype.toolHint = function (rms, elapsedSec) {
+    if (this.state !== 'tool') return null;
+    if (isFinite(rms)) {
+      this.toolRms.push(rms);
+      if (this.toolRms.length > CAL_HINT_WIN) this.toolRms.shift();
+    }
+    if (!(elapsedSec >= this.hintAfter) || this.bgRms.length < 5 || this.toolRms.length < 5) return null;
+    return median(this.toolRms) < median(this.bgRms) + this.hintDb ? 'weak' : null;
+  };
+  CalWizard.prototype.cue = function (state) {
+    // Ei piippausta juuri ennen tallennusta, jotta piippaus ei päädy mikrofoniin.
+    if (state === 'transition' || state === 'result') return 'beep-vibrate';
+    if (state === 'bg' || state === 'tool') return 'vibrate';
+    return null;
+  };
+
   return {
     ACTION: ACTION, LIMIT: LIMIT, EIGHT_H_S: EIGHT_H_S, CSV_COLS: CSV_COLS, STATUS_TXT: STATUS_TXT,
     sumA2T: sumA2T, a8: a8, points: points, totalPoints: totalPoints, remainingSec: remainingSec, status: status, effA: effA,
@@ -633,7 +703,8 @@ ol,ul{padding-left:20px;margin:6px 0}li{margin:4px 0}
     backgroundStats: backgroundStats, toolStats: toolStats, buildProfile: buildProfile, isV2: isV2, thresholds: thresholds,
     Recognizer: Recognizer, Detector: Detector, pct: pct,
     dayKey: dayKey, runSec: runSec, triggerSec: triggerSec, wallSec: wallSec, summarize: summarize, toCsv: toCsv,
-    fmtDur: fmtDur, fmtRemain: fmtRemain, csvName: csvName, migrateDays: migrateDays
+    fmtDur: fmtDur, fmtRemain: fmtRemain, csvName: csvName, migrateDays: migrateDays,
+    CalWizard: CalWizard
   };
 });
 
@@ -641,7 +712,7 @@ ol,ul{padding-left:20px;margin:6px 0}li{margin:4px 0}
 <script>
 (function(){
 'use strict';
-var VERSION='20261113-1049';
+var VERSION='20261113-1300';
 var $=function(id){return document.getElementById(id);};
 var FFT=2048, WIN=8192, FRAME_MS=50, CAL_S=8;
 var KEY='tarinamittari.v1';
@@ -825,7 +896,8 @@ function renderTools(){
     return'<div class="card"><h2>'+esc(tname(t))+'</h2>'+(t.needsRecal?'<div class="note red">Uusi kalibrointitapa: kalibroi kone uudelleen taustakoneet päällä.</div>':'')+
     '<div class="row"><div><label>a<sub>hv</sub> (m/s²)</label><input data-f="ahv" data-id="'+i+'" inputmode="decimal" value="'+f2(t.ahv,1)+'"></div><div><label>Korjauskerroin</label><input data-f="corr" data-id="'+i+'" inputmode="decimal" value="'+f2(t.corr||1,2)+'"></div><div><label>Teho (W)</label><input data-f="tehoW" data-id="'+i+'" inputmode="numeric" value="'+(t.tehoW||'')+'"></div></div>'+
     '<p class="mut">Laskennassa '+f2(TM.effA(t),2)+' m/s²'+(t.K!=null?' (K '+f2(t.K,1)+' ei lisätä)':'')+'.</p><p>'+qualityTxt(p)+(p&&p.bgDate?' <span class="pill">tausta päivitetty '+new Date(p.bgDate).toLocaleString('fi-FI')+'</span>':'')+'</p>'+
-    '<button class="btn pri" data-cal="'+i+'">'+(p?'Kalibroi uudelleen':'Kalibroi')+'</button>'+(TM.isV2(p)?'<button class="btn" data-bg="'+i+'">Päivitä tausta</button>':'')+'<button class="btn" data-ren="'+i+'">Nimeä</button><button class="btn dan" data-del="'+i+'">Poista</button></div>';}).join('');
+    '<button class="btn pri" data-cal="'+i+'">'+(p?'Kalibroi uudelleen':'Kalibroi')+'</button>'+(TM.isV2(p)?'<button class="btn" data-bg="'+i+'">Päivitä tausta</button>':'')+'<button class="btn" data-ren="'+i+'">Nimeä</button><button class="btn dan" data-del="'+i+'">Poista</button>'+
+    (TM.isV2(p)?'<p class="mut" style="margin:10px 0 0">Kun työmaan äänet muuttuvat (uusi kone, eri tila), paina Päivitä tausta. Konetta ei tarvitse äänittää uudelleen.</p>':'')+'</div>';}).join('');
 }
 $('toolList').addEventListener('change',function(e){var id=e.target.getAttribute('data-id'),f=e.target.getAttribute('data-f');if(!id)return;var v=num(e.target.value);
   if(f==='tehoW'&&e.target.value.trim()===''){S.tools[id].tehoW=null;save();return;}
@@ -843,43 +915,117 @@ $('addTool').onclick=function(){
   save();['nName','nUse','nAhv','nK','nW'].forEach(function(x){$(x).value='';});$('nCorr').value='1,0';$('nSrc').textContent='';$('preset').value='';
   renderTools();renderToolSel();calibrate(id,false);};
 
-/* ---------- Kalibrointi ---------- */
-var calStop=false;
+/* ---------- Kalibrointi (ohjattu velho) ---------- */
+var calStop=false,calPreview=null,calWiz=null;
 function sleep(ms){return new Promise(function(r){setTimeout(r,ms);});}
-async function record(sec){var frames=[],t0=Date.now();
-  while(Date.now()-t0<sec*1000){if(calStop)throw new Error('peruttu');var f=readFrame();frames.push(f);$('calLvl').style.width=lvlPct(f.rms)+'%';$('calCount').textContent=Math.ceil(sec-(Date.now()-t0)/1000);await sleep(FRAME_MS);}
-  return frames;}
-async function countdown(n,html){$('calTxt').innerHTML=html;for(var i=n;i>0;i--){if(calStop)throw new Error('peruttu');$('calCount').textContent=i;await sleep(1000);}}
 function calButtons(html){$('calBtns').innerHTML=html;}
-var BG_TXT='<p><b>Tausta.</b> Pidä työmaan muut koneet (alipaineistaja, imuri, kuivaimet) päällä, mitattava kone pois. Pidä puhelin siinä, missä se on mittauksen aikana.</p>';
+function calVis(id,on){$(id).classList.toggle('hidden',!on);}
+function calCue(kind){if(!kind)return;try{if(navigator.vibrate)navigator.vibrate(kind==='beep-vibrate'?[180,70,180]:180);}catch(e){}if(kind==='beep-vibrate')beep(1);}
+function stopCalPreview(){if(calPreview){clearInterval(calPreview);calPreview=null;}}
+function startCalPreview(){stopCalPreview();calPreview=setInterval(function(){if(calStop||!A.anT)return;var f=readFrame();$('calLvl').style.width=lvlPct(f.rms)+'%';},FRAME_MS);}
+function calLayout(step){
+  var prep=step==='prep',rec=step==='bg'||step==='tool',tr=step==='transition',res=step==='result',comp=step==='compute';
+  calVis('calStepLab',rec||tr||comp);calVis('calHead',rec||tr||res||comp);
+  calVis('calCount',rec||tr);calVis('calMeterWrap',prep||rec);
+  if(step!=='tool')calVis('calHint',false);
+  if(prep||res){$('calCount').textContent='';$('calLvl').style.width='0';}
+}
+async function record(sec,onFrame){var frames=[],t0=Date.now();
+  while(Date.now()-t0<sec*1000){if(calStop)throw new Error('peruttu');var f=readFrame();frames.push(f);$('calLvl').style.width=lvlPct(f.rms)+'%';$('calCount').textContent=Math.max(1,Math.ceil(sec-(Date.now()-t0)/1000));if(onFrame)onFrame(f,(Date.now()-t0)/1000);await sleep(FRAME_MS);}
+  return frames;}
+async function waitStart(){return new Promise(function(res,rej){
+  var done=false;
+  function ok(){if(done)return;done=true;res();}
+  function no(){if(done)return;done=true;rej(new Error('peruttu'));}
+  $('calStart').onclick=ok;
+  $('calCancel').onclick=function(){calStop=true;no();};
+  var t=setInterval(function(){if(done){clearInterval(t);return;}if(calStop||!$('calDlg').open){clearInterval(t);no();}},100);
+});}
+function showView(v){Array.prototype.forEach.call($('nav').children,function(b){b.classList.toggle('on',b.getAttribute('data-v')===v);});VIEWS.forEach(function(x){$('v-'+x).classList.toggle('hidden',x!==v);});if(v==='tools')renderTools();if(v==='log')renderLog();if(v==='set')renderSet();}
+var CHECK_LI='<li>Taustakoneet (alipaineistaja, imuri, kuivaimet) ovat päällä normaalisti.</li><li>Mitattava kone on pois päältä.</li><li>Puhelin on samalla etäisyydellä kuin mittauksessa, esimerkiksi taskussa tai rintataskussa.</li>';
 async function calibrate(id,bgOnly){
   if(M.on){alert('Lopeta mittaus ennen kalibrointia.');return;}
-  var t=S.tools[id];$('calTitle').textContent=(bgOnly?'Päivitä tausta: ':'Kalibrointi: ')+tname(t);calStop=false;$('calDlg').showModal();
-  calButtons('<button class="btn" id="calCancel">Peruuta</button>');$('calCancel').onclick=function(){calStop=true;};
+  var t=S.tools[id];calStop=false;calWiz=new TM.CalWizard({mode:bgOnly?'bg':'full',calSec:CAL_S});
+  $('calTitle').textContent=bgOnly?'Päivitä tausta':'Kalibrointi';
+  $('calToolName').textContent=tname(t);
+  $('calDlg').showModal();
   try{
-    $('calTxt').textContent='Avataan mikrofoni…';await openMic();await lockScreen();
-    await countdown(5,(bgOnly?'':'<p class="mut">Vaihe 1/2</p>')+BG_TXT);
-    $('calTxt').innerHTML='<p><b>Tallennetaan taustaa…</b> Mitattava kone pois, muut koneet päällä.</p>';var bg=await record(CAL_S);
+    calLayout('prep');
+    $('calStepLab').textContent='';$('calHead').textContent='';
+    $('calTxt').innerHTML=(bgOnly?'<p>Käytä tätä, kun työmaan äänet ovat muuttuneet – esimerkiksi kun uusi kone on käynnistynyt tai olet siirtynyt toiseen tilaan. Mitattavaa konetta ei tarvitse äänittää uudelleen.</p>':'')+
+      '<p>Tarkista nämä ennen aloitusta:</p><ul class="check">'+CHECK_LI+'</ul>';
+    calButtons('<button class="big" id="calStart" disabled>Aloita</button><button class="btn" id="calCancel">Peruuta</button>');
+    $('calTxt').insertAdjacentHTML('beforeend','<p class="mut" id="calMicNote">Avataan mikrofoni…</p>');
+    var started=waitStart();
+    await openMic();await lockScreen();
+    var note=$('calMicNote');if(note)note.textContent='Mikrofoni on valmis. Äänen taso näkyy alla.';
+    $('calStart').disabled=false;
+    startCalPreview();
+    await started;
+    stopCalPreview();
+    $('calStart').disabled=true;
+
+    calWiz.advance();
+    calCue(calWiz.cue('bg'));
+    calLayout('bg');
+    $('calStepLab').textContent=bgOnly?'Vain tausta':'Vaihe 1/2';
+    $('calHead').textContent='Vain tausta';
+    $('calTxt').innerHTML='<p>Pidä mitattava kone pois päältä. Taustakoneet saavat käydä. Älä puhu mikrofoniin.</p>';
+    calButtons('<button class="btn" id="calCancel">Peruuta</button>');$('calCancel').onclick=function(){calStop=true;};
+    var bg=await record(CAL_S,function(f){calWiz.noteBg(f.rms);});
+
     var p;
-    if(bgOnly){$('calTxt').innerHTML='<p>Lasketaan…</p>';await sleep(30);p=TM.updateBackground(t.profile,bg,A.cfg);}
-    else{
-      await countdown(5,'<p class="mut">Vaihe 2/2</p><p><b>Kone.</b> Käynnistä mitattava kone normaalissa työssä. Taustakoneet edelleen päällä.</p>');
-      $('calTxt').innerHTML='<p><b>Tallennetaan konetta… pidä käynnissä!</b></p>';var tl=await record(CAL_S);
+    if(bgOnly){
+      calLayout('compute');$('calHead').textContent='Lasketaan…';$('calTxt').innerHTML='<p>Päivitetään taustaa…</p>';await sleep(30);
+      p=TM.updateBackground(t.profile,bg,A.cfg);
+    }else{
+      calWiz.advance();
+      calCue(calWiz.cue('transition'));
+      calLayout('transition');
+      $('calStepLab').textContent='Seuraavaksi';
+      $('calHead').textContent='Käynnistä kone';
+      $('calTxt').innerHTML='<p><b>Käynnistä kone ja tee normaalia työtä.</b> Taustakoneet pysyvät päällä.</p>';
+      calButtons('<button class="btn" id="calCancel">Peruuta</button>');$('calCancel').onclick=function(){calStop=true;};
+      for(var i=calWiz.transSec;i>0;i--){if(calStop)throw new Error('peruttu');$('calCount').textContent=i;await sleep(1000);}
+
+      calWiz.advance();
+      calCue(calWiz.cue('tool'));
+      calLayout('tool');
+      $('calStepLab').textContent='Vaihe 2/2';
+      $('calHead').textContent='Kone käy';
+      $('calTxt').innerHTML='<p>Pidä kone käynnissä normaalissa työssä. Taustakoneet edelleen päällä.</p>';
+      calButtons('<button class="btn" id="calCancel">Peruuta</button>');$('calCancel').onclick=function(){calStop=true;};
+      var tl=await record(CAL_S,function(f,elapsed){
+        var h=calWiz.toolHint(f.rms,elapsed);
+        if(h==='weak'){$('calHint').textContent='Ääni ei erotu taustasta – tuo kone lähemmäs';calVis('calHint',true);}
+        else calVis('calHint',false);
+      });
       tl=tl.slice(Math.round(1000/FRAME_MS)); // ensimmäinen sekunti pois (käynnistys)
-      $('calTxt').innerHTML='<p>Lasketaan…</p>';await sleep(30);
+      calLayout('compute');$('calHead').textContent='Lasketaan…';$('calTxt').innerHTML='<p>Verrataan konetta taustaan…</p>';calVis('calHint',false);await sleep(30);
       p=TM.calibrateProfile(bg,tl,A.cfg);
     }
-    $('calCount').textContent='';var q=p.quality;
-    var adv={hyva:'<p class="ok">Hyvä: kone erottuu taustasta selvästi.</p>',kohtalainen:'<p class="action">Kohtalainen erottuvuus. Tunnistus toimii, mutta lähempänä konetta olisi varmempi.</p>',
-      heikko:'<p class="limit">Heikko erottuvuus. Siirrä puhelin lähemmäs mitattavaa konetta tai kauemmas taustakoneista ja kalibroi uudelleen.</p>',
-      ei:'<p class="limit">Kone ei erotu taustasta. Tunnistus ei toimi näin – kalibroi uudelleen lähempänä konetta.</p>'}[q.grade];
+
+    calWiz.advance();
+    calCue(calWiz.cue('result'));
+    calLayout('result');
+    var q=p.quality;
+    var titles={hyva:'Hyvä kalibrointi',kohtalainen:'Kohtalainen kalibrointi',heikko:'Heikko kalibrointi',ei:'Kone ei erotu taustasta'};
+    var adv={hyva:'<p class="ok">Koneen ääni erottuu taustasta selvästi. Voit aloittaa mittauksen.</p>',
+      kohtalainen:'<p class="action">Tunnistus toimii, mutta on varmempi, jos puhelin on lähempänä konetta. Voit jatkaa tai tehdä kalibroinnin uudelleen.</p>',
+      heikko:'<p class="limit">Siirrä puhelin lähemmäs mitattavaa konetta tai kauemmas taustakoneista ja tee kalibrointi uudelleen.</p>',
+      ei:'<p class="limit">Tunnistus ei toimi näin. Vie puhelin lähemmäs konetta ja tee kalibrointi uudelleen.</p>'}[q.grade];
+    $('calHead').innerHTML='<span class="'+(q.grade==='hyva'?'ok':q.grade==='kohtalainen'?'action':'limit')+'">'+(titles[q.grade]||'')+'</span>';
     $('calTxt').innerHTML=adv+'<p class="mut">'+q.bands+' tunnusomaista kaistaa, keskimäärin '+q.meanMarginDb.toFixed(0)+' dB taustan yläpuolella. '+(q.impact?'Iskutunniste käytössä (iskut '+f2(q.toolAm)+' vs tausta '+f2(q.bgAm)+').':'Iskutunniste ei käytössä (kone ei iske tai iskut eivät erotu).')+'</p>';
-    calButtons('<button class="btn pri" id="calOk">Tallenna</button><button class="btn" id="calRedo">Uudestaan</button><button class="btn" id="calCancel2">Peruuta</button>');
-    $('calOk').onclick=function(){t.profile=p;t.needsRecal=false;S.active=id;save();closeCal();renderTools();renderToolSel();renderMeas();};
+    var okLabel=bgOnly?'Valmis':'Valmis – aloita mittaus';
+    var redoPri=(q.grade==='heikko'||q.grade==='ei');
+    calButtons((redoPri?'<button class="big" id="calRedo">Tee uudelleen</button><button class="btn pri" id="calOk">'+okLabel+'</button>':'<button class="big" id="calOk">'+okLabel+'</button><button class="btn" id="calRedo">Tee uudelleen</button>')+'<button class="btn" id="calCancel2">Peruuta</button>');
+    $('calOk').onclick=function(){t.profile=p;t.needsRecal=false;S.active=id;save();closeCal();renderTools();renderToolSel();renderMeas();if(!bgOnly){showView('meas');startMeas();}};
     $('calRedo').onclick=function(){closeCal();calibrate(id,bgOnly);};$('calCancel2').onclick=closeCal;
   }catch(e){if(e.message!=='peruttu')alert('Kalibrointi epäonnistui: '+e.message);closeCal();}
 }
-function closeCal(){calStop=true;$('calDlg').close();if(!M.on){closeMic();unlockScreen();}}
+function closeCal(){calStop=true;stopCalPreview();if(calWiz)calWiz.cancel();if($('calDlg').open)$('calDlg').close();if(!M.on){closeMic();unlockScreen();}}
+$('calDlg').addEventListener('cancel',function(){calStop=true;});
+$('calDlg').addEventListener('close',function(){calStop=true;stopCalPreview();if(!M.on){closeMic();unlockScreen();}});
 
 /* ---------- Loki ---------- */
 $('logDay').value=today();$('logDay').onchange=renderLog;

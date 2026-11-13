@@ -76,7 +76,7 @@ ol,ul{padding-left:20px;margin:6px 0}li{margin:4px 0}
 <main>
 <!-- MITTAA -->
 <section id="v-meas">
-  <div class="note">Mittaus toimii vain, kun sovellus on auki ja näyttö päällä. Pidä puhelin samassa paikassa kuin kalibroidessa. Tulos on arvio.</div>
+  <div id="measNote" class="note">Mittaus toimii vain, kun sovellus on auki ja näyttö päällä. Pidä puhelin samassa paikassa kuin kalibroidessa. Tulos on arvio.</div>
   <div id="noTools" class="note red hidden">Lisää ja kalibroi ensin työkalu Työkalut-välilehdellä.</div>
   <div class="card">
     <label for="toolSel">Kone</label>
@@ -185,8 +185,14 @@ ol,ul{padding-left:20px;margin:6px 0}li{margin:4px 0}
   <div class="card"><h2>Päivitä tausta</h2>
     <p>Kun työmaan äänet muuttuvat – esimerkiksi kun uusi kone käynnistyy taustalle tai siirryt toiseen tilaan – avaa Työkalut ja paina <b>Päivitä tausta</b>.</p>
     <p>Äänitä vain uusi tausta (8 s, mitattava kone pois). Konetta ei tarvitse äänittää uudelleen.</p></div>
+  <div id="apkCard" class="card"><h2>Android-sovellus</h2>
+    <p>Selainsovellus keskeyttää mittauksen, kun näyttö sammuu. Asennettava Android-sovellus jatkaa mittausta myös näytön ollessa lukittu ja puhelin taskussa.</p>
+    <p><a id="apkLink" href="tarinamittari.apk" style="color:var(--acc);font-weight:700">Lataa Android-sovellus (APK)</a></p>
+    <p class="mut">Asennus: salli asennus tuntemattomista lähteistä tälle selaimelle, avaa ladattu tiedosto ja asenna. Ensimmäisellä mittauksella salli mikrofoni ja ilmoitukset, ja poista akkuoptimointi kun sovellus pyytää.</p></div>
+  <div id="nativeNote" class="card hidden"><h2>Taustamittaus</h2>
+    <p>Tämä on asennettu Android-sovellus. Mittaus jatkuu näytön ollessa lukittu ja puhelin taskussa, kun ilmoituspalkissa näkyy Tärinämittari-ilmoitus. Älä pyyhkäise ilmoitusta pois kesken mittauksen.</p></div>
   <div class="card"><h2>Käyttö</h2><ol>
-    <li>Mittaa: valitse kone, kirjoita kohde ja paina Aloita. Näyttö pysyy päällä. Vihreä pallo = kone käy.</li>
+    <li id="helpUse1">Mittaa: valitse kone, kirjoita kohde ja paina Aloita. Näyttö pysyy päällä. Vihreä pallo = kone käy.</li>
     <li>Jos laskee liikaa, pienennä herkkyyttä. Jos ei tunnista konetta, suurenna herkkyyttä tai kalibroi uudelleen.</li>
     <li>Loki: korjaa liipaisinaikoja, lisää käsin (kello tai energiamittarin kWh), jaa CSV.</li></ol></div>
   <div class="card"><h2>Laskentasäännöt</h2><ul>
@@ -199,7 +205,8 @@ ol,ul{padding-left:20px;margin:6px 0}li{margin:4px 0}
     <li>VNa 48/2005: toimenpidearvo 2,5 m/s², raja-arvo 5 m/s². HSE-pisteet: 100 = toimenpidearvo, 400 = raja-arvo.</li></ul></div>
   <div class="card"><h2>Rajoitukset</h2><ul>
     <li>Sovellus mittaa koneen käyntiajan äänestä, ei itse tärinää.</li>
-    <li>Mittaus ja hälytykset toimivat vain sovellus auki ja näyttö päällä.</li>
+    <li id="helpFgOnly">Mittaus ja hälytykset toimivat vain sovellus auki ja näyttö päällä.</li>
+    <li id="helpBgOk" class="hidden">Mittaus jatkuu taustalla näytön lukittuna, kun ilmoitus on näkyvissä. Älä pyyhkäise ilmoitusta pois kesken mittauksen.</li>
     <li>Lähellä käyvä samanlainen kone (toisen työntekijän pora) voi laskea mukaan.</li>
     <li>Tiedot ovat vain tässä puhelimessa. Jaa CSV säännöllisesti talteen.</li></ul>
     <p class="mut">Versio <span id="ver"></span></p></div>
@@ -651,6 +658,46 @@ ol,ul{padding-left:20px;margin:6px 0}li{margin:4px 0}
     return out;
   }
 
+  /* ---------- PCM-kehys (natiivi AudioRecord / testit; sama ikkuna kuin AnalyserNode) ---------- */
+  // Blackman-ikkuna + amplitudi-FFT, tulos dB kuten testien vertailu-FFT.
+  function fftDb(x) {
+    var n = x.length, re = new Float64Array(n), im = new Float64Array(n), i, j, bit;
+    for (i = 0; i < n; i++) {
+      var w = 0.42 - 0.5 * Math.cos(2 * Math.PI * i / n) + 0.08 * Math.cos(4 * Math.PI * i / n);
+      re[i] = x[i] * w;
+    }
+    for (i = 1, j = 0; i < n; i++) {
+      for (bit = n >> 1; j & bit; bit >>= 1) j ^= bit; j ^= bit;
+      if (i < j) { var tr = re[i]; re[i] = re[j]; re[j] = tr; var ti = im[i]; im[i] = im[j]; im[j] = ti; }
+    }
+    for (var len = 2; len <= n; len <<= 1) {
+      var a = -2 * Math.PI / len;
+      for (i = 0; i < n; i += len) {
+        for (var k = 0; k < len / 2; k++) {
+          var c = Math.cos(a * k), sn = Math.sin(a * k);
+          var ur = re[i + k], ui = im[i + k];
+          var vr = re[i + k + len / 2] * c - im[i + k + len / 2] * sn;
+          var vi = re[i + k + len / 2] * sn + im[i + k + len / 2] * c;
+          re[i + k] = ur + vr; im[i + k] = ui + vi; re[i + k + len / 2] = ur - vr; im[i + k + len / 2] = ui - vi;
+        }
+      }
+    }
+    var out = new Float32Array(n / 2);
+    for (k = 0; k < n / 2; k++) out[k] = 20 * Math.log10(Math.hypot(re[k], im[k]) / n + 1e-12);
+    return out;
+  }
+  function int16ToFloat(src) {
+    var n = src.length, out = new Float32Array(n);
+    for (var i = 0; i < n; i++) out[i] = src[i] / 32768;
+    return out;
+  }
+  // win: Float32Array (esim. 8192 näytettä, −1…1). Kaistat lasketaan viimeisestä fftSize-näytteestä.
+  function frameFromPcm(win, bands, fftSize) {
+    fftSize = fftSize || 2048;
+    var spec = win.subarray ? win.subarray(win.length - fftSize) : win.slice(win.length - fftSize);
+    return { rms: rmsDb(spec), bands: bandFeatures(fftDb(spec), bands), win: win };
+  }
+
   /* ---------- Ohjattu kalibrointi (käyttöliittymän tilakone) ---------- */
   // Ei muuta tunnistusmatematiikkaa: vain vaihejärjestys, ajat ja vinkki äänitasosta.
   var CAL_HINT_DB = 4, CAL_HINT_AFTER = 2, CAL_HINT_WIN = 20;
@@ -697,7 +744,7 @@ ol,ul{padding-left:20px;margin:6px 0}li{margin:4px 0}
   return {
     ACTION: ACTION, LIMIT: LIMIT, EIGHT_H_S: EIGHT_H_S, CSV_COLS: CSV_COLS, STATUS_TXT: STATUS_TXT,
     sumA2T: sumA2T, a8: a8, points: points, totalPoints: totalPoints, remainingSec: remainingSec, status: status, effA: effA,
-    makeBands: makeBands, bandFeatures: bandFeatures, rmsDb: rmsDb, shape: shape, cosine: cosine,
+    makeBands: makeBands, bandFeatures: bandFeatures, rmsDb: rmsDb, fftDb: fftDb, frameFromPcm: frameFromPcm, int16ToFloat: int16ToFloat, shape: shape, cosine: cosine,
     amFeature: amFeature, calibrateProfile: calibrateProfile, updateBackground: updateBackground, amOfFrames: amOfFrames,
     binWeights: binWeights, whiteWeights: whiteWeights, db2p: db2p, p2db: p2db,
     backgroundStats: backgroundStats, toolStats: toolStats, buildProfile: buildProfile, isV2: isV2, thresholds: thresholds,
@@ -709,10 +756,11 @@ ol,ul{padding-left:20px;margin:6px 0}li{margin:4px 0}
 });
 
 </script>
+<script src="native.js"></script>
 <script>
 (function(){
 'use strict';
-var VERSION='20261113-1300';
+var VERSION='20261113-1311';
 var $=function(id){return document.getElementById(id);};
 var FFT=2048, WIN=8192, FRAME_MS=50, CAL_S=8;
 var KEY='tarinamittari.v1';
@@ -748,8 +796,15 @@ $('nav').addEventListener('click',function(e){var v=e.target.getAttribute('data-
   if(v==='tools')renderTools();if(v==='log')renderLog();if(v==='set')renderSet();});
 
 /* ---------- Ääni ---------- */
+function isNative(){return !!(window.TMNative&&TMNative.isNative);}
 var A={ctx:null,stream:null,anF:null,anT:null,freq:null,cfg:null};
 async function openMic(){
+  if(isNative()){
+    if(A.cfg&&A.nativeOn)return;
+    var r=await TMNative.startAudio({fftSize:FFT,windowSize:WIN,frameMs:FRAME_MS});
+    A.nativeOn=true;A.cfg={sampleRate:r.sampleRate,fftSize:FFT,bands:TM.makeBands(r.sampleRate,FFT,24)};
+    return;
+  }
   if(A.stream)return;
   if(!window.isSecureContext||!navigator.mediaDevices)throw new Error('Mikrofoni vaatii https-osoitteen.');
   A.stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
@@ -762,9 +817,25 @@ async function openMic(){
   A.freq=new Float32Array(A.anF.frequencyBinCount);
   A.cfg={sampleRate:A.ctx.sampleRate,fftSize:FFT,bands:TM.makeBands(A.ctx.sampleRate,FFT,24)};
 }
-function closeMic(){if(A.stream)A.stream.getTracks().forEach(function(t){t.stop();});if(A.ctx)A.ctx.close();A.stream=A.ctx=A.anF=A.anT=null;}
-function readFrame(){A.anF.getFloatFrequencyData(A.freq);var w=new Float32Array(WIN);A.anT.getFloatTimeDomainData(w);
-  return{rms:TM.rmsDb(w.subarray(WIN-FFT)),bands:TM.bandFeatures(A.freq,A.cfg.bands),win:w};}
+function closeMic(){
+  if(isNative()){if(A.nativeOn&&TMNative.stopAudio)TMNative.stopAudio();A.nativeOn=false;return;}
+  if(A.stream)A.stream.getTracks().forEach(function(t){t.stop();});if(A.ctx)A.ctx.close();A.stream=A.ctx=A.anF=A.anT=null;
+}
+function readFrame(){
+  if(isNative()){
+    var pcm=TMNative.readPcm();
+    if(!pcm)return{rms:-120,bands:A.cfg.bands.map(function(){return-160;}),win:new Float32Array(WIN)};
+    return TM.frameFromPcm(pcm,A.cfg.bands,FFT);
+  }
+  A.anF.getFloatFrequencyData(A.freq);var w=new Float32Array(WIN);A.anT.getFloatTimeDomainData(w);
+  return{rms:TM.rmsDb(w.subarray(WIN-FFT)),bands:TM.bandFeatures(A.freq,A.cfg.bands),win:w};
+}
+function pushNativeStatus(){
+  if(!isNative()||!TMNative.updateNotification)return;
+  var t=S.tools[M.on?M.toolId:S.active],sum=TM.summarize(S.days[today()]||[],S.tools,liveSec(),M.toolId);
+  var state=M.on?(M.det&&M.det.running?'Kone käy':'Kuuntelee…'):'Ei mittausta';
+  TMNative.updateNotification({tool:t?tname(t):'',a8:sum.A8,listening:!!M.on,running:!!(M.on&&M.det&&M.det.running),state:state});
+}
 function lvlPct(db){return Math.max(0,Math.min(100,(db+80)/80*100));}
 
 /* ---------- Wake Lock ---------- */
@@ -810,7 +881,8 @@ async function startMeas(){
   var t=S.tools[S.active];if(!t||!TM.isV2(t.profile)){alert('Valitse kalibroitu kone.');return;}
   if(S.settings.notify)askNotify();
   try{await openMic();}catch(e){alert('Mikrofonia ei saatu käyttöön: '+e.message);return;}
-  if(t.profile.sampleRate&&t.profile.sampleRate!==A.ctx.sampleRate)alert('Huom: äänen näytteenottotaajuus on muuttunut kalibroinnista. Kalibroi kone uudelleen, jos tunnistus on epävarma.');
+  if(t.profile.sampleRate&&A.cfg&&t.profile.sampleRate!==A.cfg.sampleRate)alert('Huom: äänen näytteenottotaajuus on muuttunut kalibroinnista. Kalibroi kone uudelleen, jos tunnistus on epävarma.');
+  if(isNative()&&TMNative.requestBatteryExemption&&!S.settings.askedBattery){S.settings.askedBattery=true;save();TMNative.requestBatteryExemption().catch(function(){});}
   M.det=new TM.Detector({onDelay:0.5,offDelay:1.0,maxGap:3});
   M.rec=new TM.Recognizer(t.profile,t.sens||5,{dt:FRAME_MS/1000,cfg:A.cfg});
   M.toolId=S.active;M.on=true;S.lastKohde=$('kohde').value.trim();
@@ -819,7 +891,7 @@ async function startMeas(){
   await lockScreen();
   M.timer=setInterval(tick,FRAME_MS);
   $('startBtn').textContent='■ Lopeta mittaus';$('startBtn').classList.add('stop');$('toolSel').disabled=true;$('kohde').disabled=true;$('pauseNote').classList.add('hidden');
-  renderMeas();
+  renderMeas();pushNativeStatus();
 }
 function stopMeas(){
   if(!M.on)return;clearInterval(M.timer);
@@ -829,11 +901,11 @@ function stopMeas(){
   M.on=false;M.entry=null;save();closeMic();unlockScreen();
   $('startBtn').textContent='▶ Aloita mittaus';$('startBtn').classList.remove('stop');$('toolSel').disabled=false;$('kohde').disabled=false;
   $('dot').className='dot';$('stateTxt').textContent='Ei mittausta';$('runTxt').innerHTML='&nbsp;';$('dbg').innerHTML='&nbsp;';$('lvl').style.width='0';
-  renderMeas();
+  renderMeas();pushNativeStatus();
 }
 function addRun(e){if(e.end-e.start<0.3)return;M.entry.runs.push([Math.round(e.start*1000),Math.round(e.end*1000)]);M.entry.end=Date.now();delete M.entry.curRun;save();}
 function tick(){
-  if(document.hidden)return;
+  if(document.hidden&&!isNative())return;
   var now=Date.now()/1000,f=readFrame(),c=M.rec.process(f),e=M.det.update(now,c.on);
   if(e&&e.type==='end')addRun(e);
   if(now*1000-M.lastSave>5000){M.lastSave=now*1000;M.entry.end=Math.round(now*1000);if(M.det.running)M.entry.curRun=[Math.round(M.det.runStart*1000),Math.round(now*1000)];else delete M.entry.curRun;save();}
@@ -842,10 +914,11 @@ function tick(){
   $('runTxt').textContent=M.det.running?'Tämä ajo: '+TM.fmtDur(M.det.currentDuration(now)):'Kaistat '+(c.presence>=c.presThr?'✓':'✗')+'  muoto '+(c.sim>=c.simThr?'✓':'✗')+(c.amThr!=null?'  iskut '+(c.amOk?'✓':'✗'):'');
   $('lvl').style.width=Math.round(Math.min(1,c.presence)*100)+'%';$('lvlThr').style.left=Math.round(c.presThr*100)+'%';
   $('dbg').textContent='Taso '+f.rms.toFixed(0)+' dB · kaistat '+Math.round(c.presence*100)+' % · muoto '+f2(c.sim)+(c.amThr!=null?' · iskut '+f2(c.am)+' (raja '+f2(c.amThr)+')':'')+(c.drone?' · taustakone suodatettu '+c.drone+'×':'');
-  if(now-M.slow>0.5){M.slow=now;renderMeas();}
+  if(now-M.slow>0.5){M.slow=now;renderMeas();pushNativeStatus();}
 }
 document.addEventListener('visibilitychange',function(){
   if(!M.on)return;
+  if(isNative()){if(!document.hidden)lockScreen();return;}
   if(document.hidden){M.hiddenAt=Date.now();var e=M.det.forceEnd(Date.now()/1000);if(e)addRun(e);M.entry.interrupted=true;M.entry.end=Date.now();save();}
   else{lockScreen();M.det.reset();if(M.hiddenAt){var n=$('pauseNote');n.textContent='Mittaus oli tauolla '+TM.fmtDur((Date.now()-M.hiddenAt)/1000)+' (näyttö sammui tai sovellus oli taustalla). Sinä aikana käyttöä ei laskettu – lisää se tarvittaessa käsin Lokiin.';n.classList.remove('hidden');M.hiddenAt=null;}}
 });
@@ -1090,11 +1163,17 @@ $('showPts').onchange=function(){S.settings.showPts=this.checked;save();renderMe
 
 /* ---------- Käynnistys ---------- */
 $('ver').textContent=VERSION;
+if(isNative()){
+  $('apkCard').classList.add('hidden');$('nativeNote').classList.remove('hidden');
+  $('helpFgOnly').classList.add('hidden');$('helpBgOk').classList.remove('hidden');
+  $('measNote').textContent='Mittaus jatkuu myös näytön ollessa lukittu ja puhelin taskussa (ilmoitus pysyy näkyvissä). Pidä puhelin samassa paikassa kuin kalibroidessa. Tulos on arvio.';
+  var u1=$('helpUse1');if(u1)u1.textContent='Mittaa: valitse kone, kirjoita kohde ja paina Aloita. Näyttö saa mennä lukkoon. Vihreä pallo = kone käy. Ilmoituspalkissa näkyy kone ja A(8).';
+}
 setInterval(function(){if(!M.on)renderMeas();},30000);
 renderToolSel();renderMeas();
 if(Object.keys(S.tools).some(function(i){return S.tools[i].needsRecal;})){var n=$('pauseNote');n.textContent='Sovellus päivittyi: kalibrointi tehdään nyt taustakoneet päällä. Kalibroi koneet uudelleen Työkalut-välilehdellä. Aiemmat lokimerkinnät ovat tallessa.';n.classList.remove('hidden');}
-if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js').catch(function(){});
-if(!window.isSecureContext){$('pauseNote').textContent='Sivu ei ole https-osoitteessa, joten mikrofoni ei toimi.';$('pauseNote').classList.remove('hidden');}
+if(!isNative()&&'serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js').catch(function(){});
+if(!isNative()&&!window.isSecureContext){$('pauseNote').textContent='Sivu ei ole https-osoitteessa, joten mikrofoni ei toimi.';$('pauseNote').classList.remove('hidden');}
 })();
 </script>
 </body>
